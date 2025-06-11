@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Header Styles -->
+    <dimen name="font_size_header1">24sp</dimen> <!-- Main Title -->
+    <dimen name="font_size_header2">20sp</dimen> <!-- Section Title -->
+    <dimen name="font_size_header3">18sp</dimen> <!-- Subsection Title -->
+
+    <!-- Body Text Styles -->
+    <dimen name="font_size_paragraph">16sp</dimen> <!-- Standard body text -->
+    <dimen name="font_size_caption">14sp</dimen>   <!-- Smaller descriptions -->
+    <dimen name="font_size_footnote">12sp</dimen>  <!-- Metadata, footnotes -->
+</resources>

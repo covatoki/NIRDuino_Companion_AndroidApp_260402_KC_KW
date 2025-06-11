@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Left arrow (input) -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M36,12 L12,12 L18,6 M12,12 L18,18" />
+
+    <!-- Right arrow (output) -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,36 L36,36 L30,30 M36,36 L30,42" />
+
+    <!-- Middle box representing conversion -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="1"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M18,20 H30 V28 H18 Z" />
+</vector>

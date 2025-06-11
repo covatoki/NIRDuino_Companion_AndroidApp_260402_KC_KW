@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="12dp"
+    android:layout_marginBottom="8dp">
+
+    <TextView
+        android:id="@+id/textAlias"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="4"
+        android:text="Alias Name"
+        android:textSize="@dimen/font_size_header3"
+        android:layout_gravity="center_vertical"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/textAddedOn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Added on MM/DD/YYYY"
+        android:textSize="@dimen/font_size_footnote"
+        android:layout_gravity="center_vertical"
+        android:layout_weight="4" />
+
+    <TextView
+        android:id="@+id/textMacAddress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="4"
+        android:text="MAC Address"
+        android:layout_gravity="center_vertical"
+        android:textSize="@dimen/font_size_footnote"/>
+
+    <ImageButton
+        android:id="@+id/deleteButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/ic_trash"
+        android:background="@color/colorAccentValue"
+        android:contentDescription="Scan"
+        android:layout_weight="1"
+        android:layout_gravity="center_vertical"
+        android:padding="8dp"/>
+
+</LinearLayout>

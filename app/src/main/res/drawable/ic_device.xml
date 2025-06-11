@@ -1,0 +1,27 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Main chip body -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M12,12h24v24h-24z" />
+
+    <!-- Pins - Left -->
+    <path android:fillColor="#444444"
+        android:pathData="M10,14h2v2h-2zM10,18h2v2h-2zM10,22h2v2h-2zM10,26h2v2h-2zM10,30h2v2h-2z" />
+
+    <!-- Pins - Right -->
+    <path android:fillColor="#444444"
+        android:pathData="M36,14h2v2h-2zM36,18h2v2h-2zM36,22h2v2h-2zM36,26h2v2h-2zM36,30h2v2h-2z" />
+
+    <!-- Pins - Top -->
+    <path android:fillColor="#444444"
+        android:pathData="M14,10h2v2h-2zM18,10h2v2h-2zM22,10h2v2h-2zM26,10h2v2h-2zM30,10h2v2h-2z" />
+
+    <!-- Pins - Bottom -->
+    <path android:fillColor="#444444"
+        android:pathData="M14,36h2v2h-2zM18,36h2v2h-2zM22,36h2v2h-2zM26,36h2v2h-2zM30,36h2v2h-2z" />
+</vector>

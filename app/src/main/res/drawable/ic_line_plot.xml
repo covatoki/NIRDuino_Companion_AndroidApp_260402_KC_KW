@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Red: Oxyhemoglobin (HbO) with baseline segments -->
+    <path
+        android:strokeColor="#D32F2F"
+        android:strokeWidth="3"
+        android:fillColor="@android:color/transparent"
+        android:pathData="
+            M0,34
+            L4,34
+            C12,18 24,4 36,18
+            L44,34
+            L48,34" />
+
+    <!-- Black: Deoxyhemoglobin (HbR) with baseline segments -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="3"
+        android:fillColor="@android:color/transparent"
+        android:pathData="
+            M0,28
+            L4,28
+            C12,32 24,36 36,32
+            L44,28
+            L48,28" />
+</vector>

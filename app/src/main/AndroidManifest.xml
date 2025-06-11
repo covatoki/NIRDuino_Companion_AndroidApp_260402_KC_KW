@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_CONNECT"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NIRDuino_Android_App_v2"
+        tools:targetApi="31">
+        <activity
+            android:name=".stream_fNIRS_data_files.ConfigurationEditorForm"
+            android:exported="false" />
+        <activity
+            android:name=".layout_studio_files.EditLayoutActivity"
+            android:exported="false" />
+        <activity
+            android:name=".tutorials_files.Tutorials"
+            android:exported="false" />
+        <activity
+            android:name=".about_nirduino_files.AboutNIRDuino"
+            android:exported="false" />
+        <activity
+            android:name=".authors_files.Authors"
+            android:exported="false" />
+        <activity
+            android:name=".device_manager_files.DeviceManager"
+            android:exported="false" />
+        <activity
+            android:name=".snirf_convert_files.SNIRFConverter"
+            android:exported="false" />
+        <activity
+            android:name=".stream_fNIRS_data_files.StreamFnirsData"
+            android:exported="false" />
+        <activity
+            android:name=".layout_studio_files.LayoutStudio"
+            android:exported="false" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.NIRDuino_Android_App_v2">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
