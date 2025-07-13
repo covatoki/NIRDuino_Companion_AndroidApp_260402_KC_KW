@@ -1,28 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp"
-    android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
-
-    <!-- Left arrow (input) -->
-    <path
-        android:strokeColor="#000000"
-        android:strokeWidth="2"
-        android:fillColor="@android:color/transparent"
-        android:pathData="M36,12 L12,12 L18,6 M12,12 L18,18" />
-
-    <!-- Right arrow (output) -->
-    <path
-        android:strokeColor="#000000"
-        android:strokeWidth="2"
-        android:fillColor="@android:color/transparent"
-        android:pathData="M12,36 L36,36 L30,30 M36,36 L30,42" />
-
-    <!-- Middle box representing conversion -->
-    <path
-        android:strokeColor="#000000"
-        android:strokeWidth="1"
-        android:fillColor="@android:color/transparent"
-        android:pathData="M18,20 H30 V28 H18 Z" />
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+  <path
+      android:pathData="M400,680h160v-80L400,600v80ZM400,520h280v-80L400,440v80ZM280,360h400v-80L280,280v80ZM480,480ZM80,880v-80h102q-48,-23 -77.5,-68T75,630q0,-79 55.5,-134.5T265,440v80q-45,0 -77.5,32T155,630q0,39 24,69t61,38v-97h80v240L80,880ZM400,840v-80h360v-560L200,200v160h-80v-160q0,-33 23.5,-56.5T200,120h560q33,0 56.5,23.5T840,200v560q0,33 -23.5,56.5T760,840L400,840Z"
+      android:fillColor="@color/colorPrimaryValue"/>
 </vector>

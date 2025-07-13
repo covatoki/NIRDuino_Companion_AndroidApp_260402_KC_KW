@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:card_view="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    card_view:cardElevation="6dp"
+    card_view:cardCornerRadius="16dp"
+    android:layout_margin="8dp">
+
+    <LinearLayout
+        android:id="@+id/layoutContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <!-- Label + Input -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/labelConfigurationName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Configuration name:"
+                    android:textSize="@dimen/font_size_header2"
+                    android:textStyle="bold"
+                    android:paddingEnd="8dp" />
+
+                <EditText
+                    android:id="@+id/editConfigurationName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:hint="Enter name"
+                    android:textSize="@dimen/font_size_header2"
+                    android:textStyle="italic"/>
+
+            </LinearLayout>
+
+            <!-- Trash button aligned to the end -->
+            <ImageButton
+                android:id="@+id/downloadButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_download"
+                android:backgroundTint="@color/colorPrimaryValue"
+                android:contentDescription="Delete"
+                android:padding="11dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginRight="14dp"/>
+
+            <!-- Trash button aligned to the end -->
+            <ImageButton
+                android:id="@+id/duplicateButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_duplicate"
+                android:backgroundTint="@color/colorPrimaryValue"
+                android:contentDescription="Delete"
+                android:padding="11dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginRight="14dp"/>
+
+            <!-- Trash button aligned to the end -->
+            <ImageButton
+                android:id="@+id/deleteButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_trash"
+                android:backgroundTint="@color/colorAccentValue"
+                android:background="@color/colorPrimaryValue"
+                android:contentDescription="Delete"
+                android:padding="8dp"
+                android:layout_gravity="end|center_vertical"/>
+
+        </LinearLayout>
+
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="8dp"/>
+
+        <!-- Subject Count Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp"
+            android:weightSum="4">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="# of Subjects:"
+                android:textSize="@dimen/font_size_header2"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="2"/>
+
+            <ImageButton
+                android:id="@+id/decrementSubjects"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_remove"
+                android:contentDescription="Decrease subjects"
+                android:background="@null"
+                card_view:tint="@color/colorPrimaryValue" />
+
+            <TextView
+                android:id="@+id/subjectCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1"
+                android:paddingHorizontal="16dp"
+                android:textSize="@dimen/font_size_header2"
+                android:textAlignment="center" />
+
+            <ImageButton
+                android:id="@+id/incrementSubjects"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_increment"
+                android:contentDescription="Increase devices"
+                android:background="@null"
+                card_view:tint="@color/colorPrimaryValue" />
+
+        </LinearLayout>
+
+        <!-- Device per Subject Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp"
+            android:weightSum="4">
+
+            <TextView
+                android:layout_width="124dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="2"
+                android:text="# of Devices/Subject:"
+                android:textSize="@dimen/font_size_header2" />
+
+            <ImageButton
+                android:id="@+id/decrementDevicesPerSubject"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_remove"
+                android:contentDescription="Decrease devices"
+                android:background="@null"
+                card_view:tint="@color/colorPrimaryValue"/>
+
+            <TextView
+                android:id="@+id/devicePerSubjectCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1"
+                android:paddingHorizontal="16dp"
+                android:textSize="@dimen/font_size_header2"
+                android:textAlignment="center" />
+
+            <ImageButton
+                android:id="@+id/incrementDevicesPerSubject"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_increment"
+                android:contentDescription="Increase devices"
+                android:background="@null"
+                card_view:tint="@color/colorPrimaryValue" />
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/alertMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="A maximum of 6 devices can be used across subjects!"
+            android:textSize="@dimen/font_size_header3"
+            android:textColor="@color/gray"
+            android:textStyle="bold|italic"
+            android:textAlignment="center"
+            android:background="@color/amber_500"
+            android:visibility="invisible"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:background="@color/colorAccentValue"
+            android:layout_margin="8dp"/>
+
+        <!-- RecyclerView Placeholder -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/subjectDeviceRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="1">
+
+            <Button
+                android:id="@+id/streamDataButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Stream data now"
+                android:textAlignment="center"
+                android:layout_weight="1"/>
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/lastUpdated"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Last updated Month DD, YYYY   -   Last used Month DD, YYYY"
+            android:textSize="@dimen/font_size_header3"
+            android:textStyle="italic"
+            android:textAlignment="center"
+            android:layout_marginBottom="8dp"/>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

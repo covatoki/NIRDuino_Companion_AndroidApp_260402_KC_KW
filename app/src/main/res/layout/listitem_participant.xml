@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:card_view="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    card_view:cardElevation="6dp"
+    card_view:cardCornerRadius="16dp"
+    android:layout_margin="8dp">
+
+    <LinearLayout
+        android:id="@+id/layoutContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <!-- Label + Input -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/participantID"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Participant ID:"
+                    android:textSize="@dimen/font_size_header2"
+                    android:textStyle="bold"
+                    android:paddingEnd="8dp" />
+
+
+                <TextView
+                    android:id="@+id/labelParticipantName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Layout name:"
+                    android:textSize="@dimen/font_size_header2"
+                    android:textStyle="italic"
+                    android:paddingEnd="8dp" />
+
+            </LinearLayout>
+
+            <!-- Trash button aligned to the end -->
+            <ImageButton
+                android:id="@+id/editButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_edit"
+                android:backgroundTint="@color/colorPrimaryValue"
+                android:contentDescription="Delete"
+                android:padding="11dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginRight="14dp"/>
+
+            <!-- Trash button aligned to the end -->
+            <ImageButton
+                android:id="@+id/deleteButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_trash"
+                android:backgroundTint="@color/colorAccentValue"
+                android:background="@color/colorPrimaryValue"
+                android:contentDescription="Delete"
+                android:padding="8dp"
+                android:layout_gravity="end|center_vertical"/>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="3">
+
+            <TextView
+                android:id="@+id/participantGender"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Male/Female"
+                android:textSize="@dimen/font_size_header3"
+                android:textColor="@color/gray"
+                android:textStyle="italic"
+                android:textAlignment="center"
+                android:layout_weight="1"/>
+
+            <TextView
+                android:id="@+id/participantAge"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="XY Years"
+                android:textAlignment="center"
+                android:textColor="@color/gray"
+                android:textSize="@dimen/font_size_header3"
+                android:textStyle="italic" />
+
+            <TextView
+                android:id="@+id/participantHandedness"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Left/Right handed"
+                android:textSize="@dimen/font_size_header3"
+                android:textColor="@color/gray"
+                android:textStyle="italic"
+                android:textAlignment="center"
+                android:layout_weight="1"/>
+
+        </LinearLayout>
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="8dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="2">
+
+            <TextView
+                android:id="@+id/itemAdded"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Added on Month DD, YYYY"
+                android:textSize="@dimen/font_size_footnote"
+                android:textColor="@color/gray"
+                android:textStyle="italic"
+                android:textAlignment="center"
+                android:layout_weight="1"/>
+
+            <TextView
+                android:id="@+id/lastUpdated"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Last updated Month DD, YYYY Time"
+                android:textSize="@dimen/font_size_footnote"
+                android:textColor="@color/gray"
+                android:textStyle="italic"
+                android:textAlignment="center"
+                android:layout_weight="1"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

@@ -12,19 +12,31 @@
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_app_icon"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/ic_app_icon"
         android:supportsRtl="true"
         android:theme="@style/Theme.NIRDuino_Android_App_v2"
         tools:targetApi="31">
         <activity
-            android:name=".stream_fNIRS_data_files.ConfigurationEditorForm"
+            android:name=".participant_manager.ParticipantForm"
+            android:exported="false" />
+        <activity
+            android:name=".participant_manager.ParticipantManager"
+            android:exported="false" />
+        <activity
+            android:name=".live_data_view.LiveDataStream"
+            android:exported="false" />
+        <activity
+            android:name=".configure_streaming_files.ConfigureStreaming"
             android:exported="false" />
         <activity
             android:name=".layout_studio_files.EditLayoutActivity"
@@ -33,22 +45,10 @@
             android:name=".tutorials_files.Tutorials"
             android:exported="false" />
         <activity
-            android:name=".about_nirduino_files.AboutNIRDuino"
-            android:exported="false" />
-        <activity
-            android:name=".authors_files.Authors"
-            android:exported="false" />
-        <activity
             android:name=".device_manager_files.DeviceManager"
             android:exported="false" />
         <activity
             android:name=".snirf_convert_files.SNIRFConverter"
-            android:exported="false" />
-        <activity
-            android:name=".stream_fNIRS_data_files.StreamFnirsData"
-            android:exported="false" />
-        <activity
-            android:name=".layout_studio_files.LayoutStudio"
             android:exported="false" />
         <activity
             android:name=".MainActivity"
@@ -61,6 +61,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".layout_studio_files.LayoutStudio" />
+
+        <service
+            android:name=".device_communication_management.BLEConnectionManager"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
     </application>
 
 </manifest>

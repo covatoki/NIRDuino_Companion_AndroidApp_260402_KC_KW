@@ -20,7 +20,7 @@ class PannableGridView @JvmOverloads constructor(
     private var lastTouchX = 0f
     private var lastTouchY = 0f
     private var scaleFactor = 1.0f
-    private var mmPerCell = 5.0f
+    private var mmPerCell = 1.0f
     private lateinit var gridShader: BitmapShader
 
     // mmto px
@@ -50,7 +50,7 @@ class PannableGridView @JvmOverloads constructor(
                     lastTouchX = event.x
                     lastTouchY = event.y
                     draggingItem = overlays.findLast {
-                        it.contains(canvasX, canvasY, mmToPx(5f))
+                        it.contains(canvasX, canvasY, mmToPx(1f))
                     }
                 }
 
@@ -95,7 +95,7 @@ class PannableGridView @JvmOverloads constructor(
         val canvas = Canvas(gridBitmap)
         val linePaint = Paint().apply {
             color = Color.LTGRAY
-            strokeWidth = 2f
+            strokeWidth = 0.5f
         }
         canvas.drawLine(0f, 0f, cellSizePx.toFloat(), 0f, linePaint)
         canvas.drawLine(0f, 0f, 0f, cellSizePx.toFloat(), linePaint)
@@ -114,7 +114,7 @@ class PannableGridView @JvmOverloads constructor(
         canvas.drawPaint(gridPaint)
 
         // Draw overlays with zoom-adjusted size
-        val visualSize = mmToPx(5f) * scaleFactor
+        val visualSize = mmToPx(1f) * scaleFactor
         overlays.forEach { it.draw(canvas, visualSize) }
 
         canvas.restore()
@@ -158,23 +158,34 @@ class PannableGridView @JvmOverloads constructor(
     fun loadFromLayoutItem(item: LayoutStudioItem) {
         overlays.clear()
 
-        // Place them in a grid region arbitrarily for now
         var x = 0f
         var y = 0f
         item.selectedSources.sorted().forEachIndexed { i, id ->
             overlays.add(OverlayItem.Source(x, y, id))
-            x += mmToPx(10f)
+            x += mmToPx(1f)
         }
 
         x = 0f
-        y = mmToPx(20f)
+        y = mmToPx(1f)
         item.selectedDetectors.sorted().forEachIndexed { i, id ->
             overlays.add(OverlayItem.Detector(x, y, id))
-            x += mmToPx(10f)
+            x += mmToPx(1f)
         }
+
+        // 🔁 Flip after loading
+        flipLayoutY()
 
         invalidate()
     }
+
+
+    private fun flipLayoutY() {
+        if (overlays.isEmpty()) return
+
+        val maxY = overlays.maxOf { it.y }
+        overlays.forEach { it.y = maxY - it.y }
+    }
+
 
     fun getOverlayElements(): List<OverlayElement> {
         return overlays.map {
@@ -192,7 +203,12 @@ class PannableGridView @JvmOverloads constructor(
             else OverlayItem.Detector(e.x, e.y, e.id)
             overlays.add(item)
         }
+
+        // 🔁 Flip layout Y *after* loading real saved positions
+        flipLayoutY()
+
         invalidate()
     }
+
 
 }

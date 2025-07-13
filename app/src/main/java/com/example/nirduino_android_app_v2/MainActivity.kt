@@ -5,12 +5,9 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.nirduino_android_app_v2.about_nirduino_files.AboutNIRDuino
-import com.example.nirduino_android_app_v2.authors_files.Authors
 import com.example.nirduino_android_app_v2.device_manager_files.DeviceManager
 import com.example.nirduino_android_app_v2.layout_studio_files.LayoutStudio
 import com.example.nirduino_android_app_v2.snirf_convert_files.SNIRFConverter
-import com.example.nirduino_android_app_v2.stream_fNIRS_data_files.StreamFnirsData
 import com.example.nirduino_android_app_v2.tutorials_files.Tutorials
 import android.os.Build
 import android.Manifest
@@ -18,6 +15,8 @@ import android.content.pm.PackageManager
 import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.nirduino_android_app_v2.configure_streaming_files.ConfigureStreaming
+import com.example.nirduino_android_app_v2.participant_manager.ParticipantManager
 import com.example.nirduino_android_app_v2.util.AppPermissionHelper
 
 class MainActivity : AppCompatActivity() {
@@ -65,13 +64,13 @@ class MainActivity : AppCompatActivity() {
         recyclerView.layoutManager = GridLayoutManager(this, calculateSpanCount())
 
         val cards = listOf(
-            ActivitySelectorCard("Layout Studio", R.drawable.ic_layout_studio, LayoutStudio::class.java),
-            ActivitySelectorCard("Stream fNIRS data", R.drawable.ic_line_plot, StreamFnirsData::class.java),
-            ActivitySelectorCard("SNIRF Converter", R.drawable.ic_converter, SNIRFConverter::class.java),
-            ActivitySelectorCard("About NIRDuino", R.drawable.ic_nirduino, AboutNIRDuino::class.java),
-            ActivitySelectorCard("Authors", R.drawable.ic_authors, Authors::class.java),
-            ActivitySelectorCard("Device Manager", R.drawable.ic_settings, DeviceManager::class.java),
-            ActivitySelectorCard("Tutorials", R.drawable.ic_tutorials, Tutorials::class.java)
+            ActivitySelectorCard("Manage participants", R.drawable.ic_people, ParticipantManager::class.java),
+            ActivitySelectorCard("Connect devices", R.drawable.ic_chip, DeviceManager::class.java),
+            ActivitySelectorCard("Design layout", R.drawable.ic_activity_zone, LayoutStudio::class.java),
+            ActivitySelectorCard("Configure streaming", R.drawable.ic_line_plot, ConfigureStreaming::class.java),
+            ActivitySelectorCard("Run experiments", R.drawable.ic_experience, Tutorials::class.java),
+            ActivitySelectorCard("Convert to SNIRF", R.drawable.ic_converter, SNIRFConverter::class.java),
+            ActivitySelectorCard("Get information", R.drawable.ic_tutorials, Tutorials::class.java)
         )
 
         // On card click

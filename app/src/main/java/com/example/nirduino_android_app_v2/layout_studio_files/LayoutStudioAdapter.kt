@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
@@ -25,6 +26,7 @@ import java.util.TimeZone
 class LayoutStudioAdapter(
     private val adapterContext: Context,
     private val items: MutableList<LayoutStudioItem>,
+    private val layoutStore: LayoutDataStore,
     private val onItemChangedListener: LayoutStudio.OnLayoutItemChangedListener
 ) : RecyclerView.Adapter<LayoutStudioAdapter.ViewHolder>() {
 
@@ -58,32 +60,28 @@ class LayoutStudioAdapter(
     override fun onBindViewHolder(holder: ViewHolder, @SuppressLint("RecyclerView") position: Int) {
 
         if (position >= items.size || position < 0) {
-            return // Avoid processing if the position is out of bounds
+            return
         }
 
         val item = items[position]
 
-        // Format and set the last updated timestamp
         val timeZone = TimeZone.getDefault()
-        val dateFormat = SimpleDateFormat("MMMM dd, yyyy 'at' HH:mm z", Locale.getDefault())
+        val dateFormat = SimpleDateFormat("MMMM dd, yyyy 'at' HH:mm:ss z", Locale.getDefault())
         dateFormat.timeZone = timeZone
         val formattedDate = dateFormat.format(Date(item.lastUpdated))
-
         holder.lastUpdatedDateText.text = "Last updated: $formattedDate"
 
         if (!cachedOverlayMap.containsKey(item.layoutName)) {
             CoroutineScope(Dispatchers.IO).launch {
-                val saved = LayoutDataStore.loadOverlayElements(adapterContext, item.layoutName)
+                val saved = layoutStore.loadOverlayElements(item.layoutName)
                 cachedOverlayMap[item.layoutName] = saved
 
-                // Trigger UI update on main thread
                 CoroutineScope(Dispatchers.Main).launch {
                     notifyItemChanged(position)
                 }
             }
         }
 
-        // Layout name editText
         holder.layoutNameEditText.setText(item.layoutName)
         holder.layoutNameEditText.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
@@ -91,15 +89,10 @@ class LayoutStudioAdapter(
                     val oldLayoutName = item.layoutName
                     item.layoutName = s.toString()
 
-                    // Save the layout with the new name in DataStore
                     CoroutineScope(Dispatchers.IO).launch {
-                        // Save the updated layout with the new name
-                        LayoutDataStore.saveLayoutItems(adapterContext, items)
-
-                        // Copy overlay coordinates from the old layout name to the new layout name
-                        val savedOverlays = LayoutDataStore.loadOverlayElements(adapterContext, oldLayoutName)
-                        LayoutDataStore.saveOverlayElements(adapterContext, item.layoutName, savedOverlays)
-
+                        layoutStore.saveLayoutItems(items)
+                        val savedOverlays = layoutStore.loadOverlayElements(oldLayoutName)
+                        layoutStore.saveOverlayElements(item.layoutName, savedOverlays)
                     }
 
                     val currentPosition = holder.adapterPosition
@@ -108,15 +101,12 @@ class LayoutStudioAdapter(
                     }
                 }
             }
-
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
 
-
-        // Sources
         holder.sources.forEachIndexed { index, checkBox ->
-            checkBox.setOnCheckedChangeListener(null) // prevent duplication
+            checkBox.setOnCheckedChangeListener(null)
             checkBox.isChecked = item.selectedSources.contains(index + 1)
             checkBox.setOnCheckedChangeListener { _, isChecked ->
                 if (isChecked) item.selectedSources.add(index + 1)
@@ -128,7 +118,6 @@ class LayoutStudioAdapter(
             }
         }
 
-        // Detectors
         holder.detectors.forEachIndexed { index, checkBox ->
             checkBox.setOnCheckedChangeListener(null)
             checkBox.isChecked = item.selectedDetectors.contains(index + 1)
@@ -144,17 +133,12 @@ class LayoutStudioAdapter(
                 val currentPosition = holder.adapterPosition
                 if (currentPosition != RecyclerView.NO_POSITION && currentPosition < items.size) {
                     val layoutNameToDelete = items[currentPosition].layoutName
-
-                    // Remove the layout from the RecyclerView
                     items.removeAt(currentPosition)
                     notifyItemRemoved(currentPosition)
 
-                    // Delete the layout's data from DataStore
                     CoroutineScope(Dispatchers.IO).launch {
-                        LayoutDataStore.deleteOverlayElements(adapterContext, layoutNameToDelete)
-
-                        // Optionally, also delete the layout item itself from the DataStore
-                        LayoutDataStore.deleteLayoutItems(adapterContext, layoutNameToDelete)
+                        layoutStore.deleteOverlayElements(layoutNameToDelete)
+                        layoutStore.deleteLayoutItems(layoutNameToDelete)
                     }
                 }
             }
@@ -168,31 +152,25 @@ class LayoutStudioAdapter(
                 return@setOnClickListener
             }
 
-            if (item.layoutStatus == false){
-                item.layoutStatus = true
-            }
+            if (!item.layoutStatus) item.layoutStatus = true
 
             val intent = Intent(context, EditLayoutActivity::class.java)
             intent.putExtra("layoutItemJson", Gson().toJson(item))
             intent.putExtra("loadFromStorage", true)
             context.startActivity(intent)
-
         }
 
         holder.view2DDataButton.setOnClickListener {
-
             val context = holder.itemView.context
             val layoutName = item.layoutName
 
-            // Load saved overlay elements from DataStore
             val savedOverlays = runBlocking {
-                LayoutDataStore.loadOverlayElements(context, layoutName) // Load overlays from DataStore
+                layoutStore.loadOverlayElements(layoutName)
             }
 
             val dpi = context.resources.displayMetrics.xdpi
             fun pxToMm(px: Float): Float = px * 25.4f / dpi
 
-            // Filter matching overlays based on selected sources and detectors
             val matchingItems = savedOverlays.filter {
                 (it.isSource && item.selectedSources.contains(it.id)) ||
                         (!it.isSource && item.selectedDetectors.contains(it.id))
@@ -217,14 +195,12 @@ class LayoutStudioAdapter(
                 }
             }
 
-            // Show the overlay data in an AlertDialog
             AlertDialog.Builder(context)
                 .setTitle("2D Layout Coordinates (in mm)")
                 .setMessage(message)
                 .setPositiveButton("OK", null)
                 .show()
         }
-
 
         holder.duplicateLayoutButton.setOnClickListener {
             val original = items[position]
@@ -235,14 +211,12 @@ class LayoutStudioAdapter(
                 selectedDetectors = original.selectedDetectors.toMutableSet()
             )
 
-            // Copy overlay coordinates if any
             CoroutineScope(Dispatchers.IO).launch {
-                val originalOverlays = LayoutDataStore.loadOverlayElements(adapterContext, original.layoutName)
-                LayoutDataStore.saveOverlayElements(adapterContext, copy.layoutName, originalOverlays)
+                val originalOverlays = layoutStore.loadOverlayElements(original.layoutName)
+                layoutStore.saveOverlayElements(copy.layoutName, originalOverlays)
 
-                // Ensure the list is updated after saving
                 CoroutineScope(Dispatchers.Main).launch {
-                    addItem(copy) // Add to the adapter's list
+                    addItem(copy)
                 }
             }
         }
@@ -251,9 +225,8 @@ class LayoutStudioAdapter(
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val layout = items[position]
-                    val overlays = LayoutDataStore.loadOverlayElements(adapterContext, layout.layoutName)
+                    val overlays = layoutStore.loadOverlayElements(layout.layoutName)
 
-                    // Build export structure
                     val exportObject = mapOf(
                         "layoutID" to layout.layoutId.toString(),
                         "layoutName" to layout.layoutName,
@@ -272,8 +245,6 @@ class LayoutStudioAdapter(
                     )
 
                     val json = Gson().toJson(exportObject)
-
-                    // Define the output path
                     val docsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
                     val targetDir = java.io.File(docsDir, "NIRDuinoCompanion/Layouts")
                     if (!targetDir.exists()) targetDir.mkdirs()
@@ -295,7 +266,6 @@ class LayoutStudioAdapter(
                 }
             }
         }
-
     }
 
     fun addItem(item: LayoutStudioItem) {
@@ -324,5 +294,4 @@ class LayoutStudioAdapter(
         items.addAll(newItems)
         notifyDataSetChanged()
     }
-
 }

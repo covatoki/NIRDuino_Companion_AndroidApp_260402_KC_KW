@@ -5,7 +5,7 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".stream_fNIRS_data_files.StreamFnirsData">
+    tools:context=".layout_studio_files.LayoutStudio">
 
     <!-- RecyclerView to display layout items -->
     <androidx.recyclerview.widget.RecyclerView
@@ -34,6 +34,5 @@
         app:rippleColor="@color/colorPrimaryValue"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-
 
 </androidx.constraintlayout.widget.ConstraintLayout>

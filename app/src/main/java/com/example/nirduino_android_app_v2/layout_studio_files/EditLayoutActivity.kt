@@ -38,13 +38,15 @@ class EditLayoutActivity : AppCompatActivity() {
 
         val loadFromStorage = intent.getBooleanExtra("loadFromStorage", false)
 
+        val layoutStore = LayoutDataStore.getInstance(applicationContext)
+
         if (loadFromStorage && layoutItem != null) {
             lifecycleScope.launch {
 
                 val saved = try {
-                    LayoutDataStore.loadOverlayElements(this@EditLayoutActivity, layoutItem.layoutName)
+                    layoutStore.loadOverlayElements(layoutItem.layoutName)
                 } catch (e: Exception) {
-                    android.util.Log.e("EditLayoutActivity", "Error loading layout: ${e.message}")
+                    Log.e("EditLayoutActivity", "Error loading layout: ${e.message}")
                     emptyList()
                 }
 
@@ -60,7 +62,6 @@ class EditLayoutActivity : AppCompatActivity() {
                 val existingSourceIds = mutableSetOf<Int>()
                 val existingDetectorIds = mutableSetOf<Int>()
 
-                // Keep saved sources/detectors that are still in current layout
                 saved.forEach {
                     if (it.isSource && it.id in currentSources) {
                         merged.add(it)
@@ -71,7 +72,6 @@ class EditLayoutActivity : AppCompatActivity() {
                     }
                 }
 
-                // Add new sources
                 var x = 0f
                 var y = 0f
                 for (src in currentSources.sorted()) {
@@ -81,7 +81,6 @@ class EditLayoutActivity : AppCompatActivity() {
                     }
                 }
 
-                // Add new detectors
                 x = 0f
                 y = gridView.mmToPx(20f)
                 for (det in currentDetectors.sorted()) {
@@ -111,52 +110,27 @@ class EditLayoutActivity : AppCompatActivity() {
             gridView.recenterOnItems()
         }
 
-//        saveButton.setOnClickListener {
-//            val elements = gridView.getOverlayElements()
-//            lifecycleScope.launch {
-//                // Save using Jetpack DataStore (asynchronously)
-//                LayoutDataStore.saveOverlayElements(this@EditLayoutActivity, layoutItem!!.layoutName, elements)
-//                android.util.Log.d("EditLayoutActivity", "Layout saved: ${elements.size} items")
-//
-//                // Show a toast to notify the user
-//                Toast.makeText(applicationContext, "Layout data saved!", Toast.LENGTH_SHORT).show()
-//
-//                // Finish the current activity and return to the previous one
-//                finish()
-//            }
-//        }
-
         saveButton.setOnClickListener {
             val elements = gridView.getOverlayElements()
 
             lifecycleScope.launch {
-                // 1. Save overlay elements for this layout name
-                LayoutDataStore.saveOverlayElements(this@EditLayoutActivity, layoutItem!!.layoutName, elements)
+                layoutStore.saveOverlayElements(layoutItem!!.layoutName, elements)
+                val allLayouts = layoutStore.loadLayoutItems().toMutableList()
 
-                // 2. Load the full list of layout items from DataStore
-                val allLayouts = LayoutDataStore.loadLayoutItems(this@EditLayoutActivity).toMutableList()
-
-                // 3. Find the matching item by layout name
-                val index = allLayouts.indexOfFirst { it.layoutName == layoutItem!!.layoutName }
+                val index = allLayouts.indexOfFirst { it.layoutName == layoutItem.layoutName }
                 if (index != -1) {
-                    // 4. Update lastUpdated timestamp
                     allLayouts[index].lastUpdated = System.currentTimeMillis()
+                    layoutStore.saveLayoutItems(allLayouts)
 
-                    // 5. Save the modified list back
-                    LayoutDataStore.saveLayoutItems(this@EditLayoutActivity, allLayouts)
-
-                    // 6. Optional log and toast
-                    android.util.Log.d("EditLayoutActivity", "Layout updated: ${layoutItem!!.layoutName}")
+                    Log.d("EditLayoutActivity", "Layout updated: ${layoutItem.layoutName}")
                     Toast.makeText(applicationContext, "Layout data saved!", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(applicationContext, "Layout not found!", Toast.LENGTH_SHORT).show()
                 }
 
-                // 7. Close the activity
                 finish()
             }
         }
-
 
         updateMmLabel()
     }

@@ -39,12 +39,14 @@ class DeviceManager : AppCompatActivity() {
     private lateinit var newDeviceAdapter: NewDeviceAdapter
     private val knownDeviceList = mutableListOf<KnownDeviceItem>()
     private val newDeviceList = mutableListOf<NewDeviceItem>()
-    private lateinit var scanBt:Button
+    private lateinit var scanBt: Button
 
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private var bleScanner: BluetoothLeScanner? = null
     private var scanning = false
-    private val scanResults = mutableSetOf<String>() // to avoid duplicates
+    private val scanResults = mutableSetOf<String>()
+
+    private lateinit var knownDeviceStore: KnownDeviceDataStore
 
     private val scanCallback = object : ScanCallback() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -57,66 +59,53 @@ class DeviceManager : AppCompatActivity() {
             Log.e("DeviceFound", name)
 
             runOnUiThread {
-
-                if (name.contains("NIRDuino")){
-
+                if (name.contains("NIRDuino")) {
                     addNewDevice(name, rssi, mac)
-
                 }
-
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
             Toast.makeText(this@DeviceManager, "Scan failed: $errorCode", Toast.LENGTH_SHORT).show()
         }
-
     }
-
 
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_device_manager)
 
-        // RecyclerViews
+        knownDeviceStore = KnownDeviceDataStore.getInstance(applicationContext)
+
         knownDeviceRecyclerView = findViewById(R.id.knownDeviceRecyclerView)
         knownDeviceRecyclerView.layoutManager = LinearLayoutManager(this)
 
         newDeviceRecyclerView = findViewById(R.id.newDeviceRecyclerView)
         newDeviceRecyclerView.layoutManager = LinearLayoutManager(this)
 
-        // Adapters
         knownDeviceAdapter = KnownDevicesAdapter(knownDeviceList) { device ->
             lifecycleScope.launch {
-                // Remove from memory list and UI
                 knownDeviceList.remove(device)
                 knownDeviceAdapter.notifyDataSetChanged()
-
-                // Remove from persistent DataStore
-                KnownDeviceDataStore.removeDevice(this@DeviceManager, device.macAddress)
+                knownDeviceStore.removeDevice(device.macAddress)
             }
         }
 
         newDeviceAdapter = NewDeviceAdapter(newDeviceList) { device ->
             lifecycleScope.launch {
-
-                val existing = KnownDeviceDataStore.getDevices(this@DeviceManager).first()
+                val existing = knownDeviceStore.getDevices().first()
                 val alreadySaved = existing.any { it.macAddress == device.textMacAddress }
 
                 if (!alreadySaved) {
-                    // Show alias dialog only if MAC is not already saved
                     showTextInputDialog(this@DeviceManager, "Enter device alias:", "Save device") { alias ->
                         val currentDate = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()).format(Date())
                         val knownDevice = KnownDeviceItem(alias, currentDate, device.textMacAddress)
 
-                        // Add to persistent store and update UI
                         lifecycleScope.launch {
-                            KnownDeviceDataStore.addDevice(this@DeviceManager, knownDevice)
+                            knownDeviceStore.addDevice(knownDevice)
                             newDeviceList.remove(device)
                             newDeviceAdapter.notifyDataSetChanged()
                         }
-
                     }
                 } else {
                     Toast.makeText(this@DeviceManager, "Device already saved", Toast.LENGTH_SHORT).show()
@@ -124,20 +113,17 @@ class DeviceManager : AppCompatActivity() {
             }
         }
 
-        // Attach adapters
         knownDeviceRecyclerView.adapter = knownDeviceAdapter
         newDeviceRecyclerView.adapter = newDeviceAdapter
 
-        // ✅ Load saved known devices early
         lifecycleScope.launch {
-            KnownDeviceDataStore.getDevices(this@DeviceManager).collect { savedDevices ->
+            knownDeviceStore.getDevices().collect { savedDevices ->
                 knownDeviceList.clear()
                 knownDeviceList.addAll(savedDevices)
                 knownDeviceAdapter.notifyDataSetChanged()
             }
         }
 
-        // Scan button
         scanBt = findViewById(R.id.scanButton)
         scanBt.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.colorPrimaryValue))
         scanBt.setTextColor(ContextCompat.getColorStateList(this, R.color.white))
@@ -146,7 +132,6 @@ class DeviceManager : AppCompatActivity() {
             bleScanner = bluetoothAdapter.bluetoothLeScanner
 
             if (!scanning) {
-                // Clear list before fresh scan
                 newDeviceList.clear()
                 newDeviceAdapter.notifyDataSetChanged()
                 scanResults.clear()
@@ -165,17 +150,14 @@ class DeviceManager : AppCompatActivity() {
                     scanBt.text = "SCAN"
                     scanBt.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.colorPrimaryValue))
                 }, 1000)
-            }
-            else{
+            } else {
                 scanBt.text = "SCAN"
                 scanBt.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.colorPrimaryValue))
             }
         }
-
     }
 
     private fun addNewDevice(name: String, rssi: Int, mac: String) {
-        // Check if it's already in the list
         val exists = newDeviceList.any { it.textMacAddress == mac }
 
         if (!exists) {
@@ -183,7 +165,6 @@ class DeviceManager : AppCompatActivity() {
             newDeviceList.add(newItem)
             newDeviceAdapter.notifyItemInserted(newDeviceList.size - 1)
         } else {
-            // Optionally update RSSI if already exists
             val index = newDeviceList.indexOfFirst { it.textMacAddress == mac }
             if (index != -1) {
                 newDeviceList[index] = NewDeviceItem(name, rssi, mac)
@@ -191,7 +172,6 @@ class DeviceManager : AppCompatActivity() {
             }
         }
     }
-
 
     fun showTextInputDialog(
         context: Context,
@@ -229,5 +209,4 @@ class DeviceManager : AppCompatActivity() {
 
         dialog.show()
     }
-
 }
