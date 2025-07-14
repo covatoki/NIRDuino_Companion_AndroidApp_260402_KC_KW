@@ -134,6 +134,8 @@ dependencies {
     // Jetpack Security (encrypted prefs for DB key)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
+    // OkHttp for HTTP requests
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
 /* ---------- KAPT speed-ups ---------- */
