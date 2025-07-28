@@ -34,12 +34,6 @@
             android:name=".participant_manager.ParticipantManager"
             android:exported="false" />
         <activity
-            android:name=".live_data_view.LiveDataStream"
-            android:exported="false" />
-        <activity
-            android:name=".configure_streaming_files.ConfigureStreaming"
-            android:exported="false" />
-        <activity
             android:name=".layout_studio_files.EditLayoutActivity"
             android:exported="false" />
         <activity
@@ -51,6 +45,8 @@
         <activity
             android:name=".snirf_convert_files.SNIRFConverter"
             android:exported="false" />
+        <activity android:name=".device_communication.StreamfNIRSData"
+            android:exported="false"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -67,7 +63,9 @@
         <service
             android:name=".device_communication_management.BLEConnectionManager"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice"
+            tools:targetApi="29"
+            tools:ignore="ForegroundServicePermission" />
 
     </application>
 

@@ -16,7 +16,6 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.example.nirduino_android_app_v2.R
-import com.example.nirduino_android_app_v2.configure_streaming_files.ConfigurationCardItem
 import com.example.nirduino_android_app_v2.device_manager_files.KnownDeviceDataStore
 import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
 import com.google.gson.Gson
@@ -28,7 +27,6 @@ class BLEConnectionManager : Service() {
 
     private val serviceScope = HandlerThread("BLEServiceThread").apply { start() }
     private val serviceHandler = Handler(serviceScope.looper)
-    private var currentConfig: ConfigurationCardItem? = null
 
     private val activeConnections = mutableMapOf<String, BleDeviceConnection>()
     private lateinit var bluetoothAdapter: BluetoothAdapter
@@ -69,9 +67,12 @@ class BLEConnectionManager : Service() {
 
         when (intent?.getStringExtra(EXTRA_COMMAND)) {
             COMMAND_START -> {
-                intent.getStringExtra(EXTRA_CONFIG_JSON)?.let {
-                    loadConfiguration(it)
-                } ?: Log.w("BLEConnectionManager", "No config JSON provided with START command")
+                val alias = intent.getStringExtra(EXTRA_DEVICE_ALIAS)
+                if (!alias.isNullOrEmpty()) {
+                    loadSingleDeviceAlias(alias)
+                } else {
+                    Log.w("BLEConnectionManager", "No device alias provided with START command")
+                }
             }
             COMMAND_STOP -> {
                 Log.d("BLEConnectionManager", "Stop command received")
@@ -81,6 +82,33 @@ class BLEConnectionManager : Service() {
         }
 
         return START_STICKY
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun loadSingleDeviceAlias(alias: String) {
+        serviceHandler.post {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val deviceStore = KnownDeviceDataStore.getInstance(applicationContext)
+                    val aliasToMacMap = deviceStore.getAllDeviceAliasesWithMac()
+
+                    val mac = aliasToMacMap[alias]
+                    if (mac != null) {
+                        macToAliasMap = mapOf(mac to alias)
+                        targetMacs = setOf(mac)
+
+                        configurationReadyToStream = false
+                        startBleScan()
+
+                        Log.d("BLEConnectionManager", "Started scan for alias: $alias, MAC: $mac")
+                    } else {
+                        Log.e("BLEConnectionManager", "Alias not found: $alias")
+                    }
+                } catch (e: Exception) {
+                    Log.e("BLEConnectionManager", "Failed to load alias", e)
+                }
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -120,39 +148,22 @@ class BLEConnectionManager : Service() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun loadConfiguration(configJson: String) {
+    fun loadDeviceAliasesToConnect(deviceAliases: List<String>) {
         serviceHandler.post {
-            try {
-                val config = Gson().fromJson(configJson, ConfigurationCardItem::class.java)
-                config.regenerateDeviceAndLayoutLists()
-                config.updateTimestamp()
-                currentConfig = config
-                Log.d("BLEConnectionManager", "Loaded config: $config")
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val deviceStore = KnownDeviceDataStore.getInstance(applicationContext)
+                    val aliasToMacMap = deviceStore.getAllDeviceAliasesWithMac()
 
-                CoroutineScope(Dispatchers.IO).launch @androidx.annotation.RequiresPermission(
-                    android.Manifest.permission.BLUETOOTH_SCAN
-                ) {
-                    try {
-                        val deviceStore = KnownDeviceDataStore.getInstance(applicationContext)
-                        val layoutStore = LayoutDataStore.getInstance(applicationContext)
+                    macToAliasMap = aliasToMacMap.entries.associate { (alias, mac) -> mac to alias }
+                    targetMacs = deviceAliases.mapNotNull { aliasToMacMap[it] }.toSet()
 
-                        val aliasToMacMap = deviceStore.getAllDeviceAliasesWithMac()
-                        val layoutNameToLayoutData = layoutStore.getAllLayoutsByName()
-
-                        macToAliasMap = aliasToMacMap.entries.associate { (alias, mac) -> mac to alias }
-                        targetMacs = config.selectedDeviceNames.mapNotNull { aliasToMacMap[it] }.toSet()
-
-                        configurationReadyToStream = false
-                        startBleScan()
-                        Log.d("BLEConnectionManager", "Target MACs: $targetMacs")
-
-                    } catch (e: Exception) {
-                        Log.e("BLEConnectionManager", "Failed to load DataStore entries", e)
-                    }
+                    configurationReadyToStream = false
+                    startBleScan()
+                    Log.d("BLEConnectionManager", "Started scan for: $targetMacs")
+                } catch (e: Exception) {
+                    Log.e("BLEConnectionManager", "Failed to load devices", e)
                 }
-
-            } catch (e: Exception) {
-                Log.e("BLEConnectionManager", "Failed to load config", e)
             }
         }
     }
@@ -249,16 +260,17 @@ class BLEConnectionManager : Service() {
         const val EXTRA_CONFIG_JSON = "config_json"
         const val COMMAND_START = "start"
         const val COMMAND_STOP = "stop"
+        const val EXTRA_DEVICE_ALIAS = "device_alias"
 
-        private var connectionManagerInstance: BLEConnectionManager? = null
-
-        fun startService(context: Context, configJson: String) {
+        fun startService(context: Context, alias: String) {
             val intent = Intent(context, BLEConnectionManager::class.java).apply {
                 putExtra(EXTRA_COMMAND, COMMAND_START)
-                putExtra(EXTRA_CONFIG_JSON, configJson)
+                putExtra(EXTRA_DEVICE_ALIAS, alias)
             }
             context.startForegroundService(intent)
         }
+
+        private var connectionManagerInstance: BLEConnectionManager? = null
 
         fun stopService(context: Context) {
             val intent = Intent(context, BLEConnectionManager::class.java).apply {

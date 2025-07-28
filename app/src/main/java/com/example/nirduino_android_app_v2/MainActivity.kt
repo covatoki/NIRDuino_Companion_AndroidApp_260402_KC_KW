@@ -15,7 +15,7 @@ import android.content.pm.PackageManager
 import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.nirduino_android_app_v2.configure_streaming_files.ConfigureStreaming
+import com.example.nirduino_android_app_v2.device_communication.StreamfNIRSData
 import com.example.nirduino_android_app_v2.participant_manager.ParticipantManager
 import com.example.nirduino_android_app_v2.util.AppPermissionHelper
 
@@ -67,10 +67,9 @@ class MainActivity : AppCompatActivity() {
             ActivitySelectorCard("Manage participants", R.drawable.ic_people, ParticipantManager::class.java),
             ActivitySelectorCard("Connect devices", R.drawable.ic_chip, DeviceManager::class.java),
             ActivitySelectorCard("Design layout", R.drawable.ic_activity_zone, LayoutStudio::class.java),
-            ActivitySelectorCard("Configure streaming", R.drawable.ic_line_plot, ConfigureStreaming::class.java),
-            ActivitySelectorCard("Run experiments", R.drawable.ic_experience, Tutorials::class.java),
+            ActivitySelectorCard("Stream fNIRS data", R.drawable.ic_line_plot, StreamfNIRSData::class.java),
             ActivitySelectorCard("Convert to SNIRF", R.drawable.ic_converter, SNIRFConverter::class.java),
-            ActivitySelectorCard("Get information", R.drawable.ic_tutorials, Tutorials::class.java)
+//            ActivitySelectorCard("Get information", R.drawable.ic_tutorials, Tutorials::class.java)
         )
 
         // On card click
