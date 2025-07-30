@@ -16,7 +16,8 @@ import java.util.UUID
 class BleDeviceConnection(
     private val context: Context,
     private val device: BluetoothDevice,
-    private val alias: String
+    private val alias: String,
+    val selectedLayoutName: String
 ) {
     private var bluetoothGatt: BluetoothGatt? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -34,8 +35,9 @@ class BleDeviceConnection(
     private val receivedBuffers = mutableListOf<ByteArray>()
     private val fullDataBuffer = ByteArray(expectedTotalBytes)
     private var totalBytesWritten = 0
+    var ledIntensityValues = IntArray(33) { 8 }
 
-    private val dataProcessor = DataParsingAndProcessing()
+    val dataProcessor = DataParsingAndProcessing()
 
     companion object {
         val FNIRS_SERVICE_UUID: UUID = UUID.fromString("938548e6-c655-11ea-87d0-0242ac130003")
@@ -51,14 +53,17 @@ class BleDeviceConnection(
     fun isConnected(): Boolean = bluetoothGatt != null
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    fun streamNIRDuinoData() {
+    fun streamNIRDuinoData(ledIntensityValues: IntArray) {
+
+        this.ledIntensityValues = ledIntensityValues
+
         val service = bluetoothGatt?.getService(FNIRS_SERVICE_UUID)
         val characteristic = service?.getCharacteristic(LED_CHARACTERISTIC_UUID)
         if (characteristic == null) {
             Log.e("BleDeviceConnection", "LED characteristic not found.")
             return
         }
-        val value = hexStringToByteArray("01")
+        val value = hexStringToByteArray(getCommandString(this.ledIntensityValues))
         val success = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             bluetoothGatt?.writeCharacteristic(characteristic, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) ?: false
         } else {
@@ -66,7 +71,24 @@ class BleDeviceConnection(
             characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             bluetoothGatt?.writeCharacteristic(characteristic) ?: false
         }
+
+        dataProcessor.resetTimeStamps()
+
         Log.d("BleDeviceConnection", "Sent START stream command to $alias, success: $success")
+        dataProcessor.startNewDataRound(this.ledIntensityValues)
+    }
+
+    fun getCommandString(intArray: IntArray): String {
+
+        val hexString = StringBuilder()
+
+        for (intValue in intArray) {
+            val hexValue = String.format("%02X", intValue)
+            // Append the hex value to the result string
+            hexString.append(hexValue)
+        }
+
+        return hexString.toString()
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -86,6 +108,8 @@ class BleDeviceConnection(
             bluetoothGatt?.writeCharacteristic(characteristic) ?: false
         }
         Log.d("BleDeviceConnection", "Sent STOP stream command to $alias, success: $success")
+
+        dataProcessor.resetTimeStamps();
     }
 
     fun hexStringToByteArray(s: String): ByteArray {
@@ -103,6 +127,7 @@ class BleDeviceConnection(
         isManualDisconnect = false
         retryCount = 0
         connectGatt()
+        dataProcessor.resetTimeStamps()
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -112,6 +137,8 @@ class BleDeviceConnection(
         bluetoothGatt?.close()
         bluetoothGatt = null
         Log.d("BleDeviceConnection", "Manually disconnected from $alias")
+        dataProcessor.saveSessionToFile(context, alias, BLEConnectionManager.selectedLayoutName)
+
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -119,6 +146,10 @@ class BleDeviceConnection(
         bluetoothGatt?.close()
         bluetoothGatt = device.connectGatt(context, false, gattCallback)
         Log.d("BleDeviceConnection", "Attempting connection to $alias")
+    }
+
+    fun logStimulusEvent(event: StimulusEvent) {
+        dataProcessor?.handleStimulusEvent(event)
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -144,6 +175,7 @@ class BleDeviceConnection(
                     bluetoothGatt?.close()
                     bluetoothGatt = null
                     onDisconnected?.invoke()
+
                     if (!isManualDisconnect && retryCount < maxRetries) {
                         retryCount++
                         Log.d("BleDeviceConnection", "Retrying connection ($retryCount/$maxRetries)...")
@@ -197,15 +229,7 @@ class BleDeviceConnection(
             val buffer = ByteBuffer.wrap(data)
             val isRoundReady = dataProcessor.convertByteToChannelData(buffer)
 
-            if (isRoundReady) {
-                val duration = dataProcessor.durationDataRoundSeconds
-                Log.i("BLEDeviceConnection", "[$alias] Round duration: ${duration}s")
-
-                // Optional: forward parsed data to the manager
-                // onDataReceived?.invoke(dataProcessor.dataArray.flatten().toDoubleArray(), alias)
-            }
         }
-
 
         private fun parseAndSumTimestamps() {
             val buffer = ByteBuffer.wrap(fullDataBuffer).order(ByteOrder.LITTLE_ENDIAN)
@@ -241,5 +265,6 @@ class BleDeviceConnection(
                 gatt.discoverServices()
             }
         }
+
     }
 }

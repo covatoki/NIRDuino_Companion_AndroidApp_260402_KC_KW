@@ -22,18 +22,21 @@ import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class BLEConnectionManager : Service() {
 
     private val serviceScope = HandlerThread("BLEServiceThread").apply { start() }
     private val serviceHandler = Handler(serviceScope.looper)
 
-    private val activeConnections = mutableMapOf<String, BleDeviceConnection>()
+    val activeConnections = mutableMapOf<String, BleDeviceConnection>()
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private var bluetoothLeScanner: BluetoothLeScanner? = null
     private val scanCallback = BleScanCallback()
     private var targetMacs = emptySet<String>()
     private var macToAliasMap = mapOf<String, String>()
+    private var layoutOverlayElements: List<com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement> = emptyList()
 
     @Volatile
     private var configurationReadyToStream: Boolean = false
@@ -43,12 +46,12 @@ class BLEConnectionManager : Service() {
     }
 
     @SuppressLint("MissingPermission")
-    fun streamFromAllDevices() {
-        activeConnections.values.forEach { it.streamNIRDuinoData() }
+    fun streamFromDevice(ledIntensityValues: IntArray) {
+        activeConnections.values.forEach { it.streamNIRDuinoData(ledIntensityValues) }
     }
 
     @SuppressLint("MissingPermission")
-    fun stopStreamingFromAllDevices() {
+    fun stopStreamingFromDevice() {
         activeConnections.values.forEach { it.stopStreamNIRDuinoData() }
     }
 
@@ -58,16 +61,34 @@ class BLEConnectionManager : Service() {
         startForegroundService()
     }
 
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!hasRequiredPermissions()) {
             Log.e("BLEConnectionManager", "Missing required BLE permissions")
             return START_NOT_STICKY
         }
 
+        val layoutJson = intent?.getStringExtra(EXTRA_LAYOUT_JSON)
+        val alias = intent?.getStringExtra(EXTRA_DEVICE_ALIAS)
+
+        if (!layoutJson.isNullOrBlank()) {
+            val gson = Gson()
+            val overlays = try {
+                gson.fromJson(layoutJson, Array<com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement>::class.java).toList()
+            } catch (e: Exception) {
+                Log.e("BLEConnectionManager", "❌ Failed to parse layout JSON", e)
+                emptyList()
+            }
+
+            overlays.forEach {
+                Log.d("BLEConnectionManager", "✅ Layout Element: ${if (it.isSource) "Source" else "Detector"} ${it.id} → x=${it.x}, y=${it.y}")
+            }
+
+            // Store if needed
+            layoutOverlayElements = overlays
+        }
+
         when (intent?.getStringExtra(EXTRA_COMMAND)) {
             COMMAND_START -> {
-                val alias = intent.getStringExtra(EXTRA_DEVICE_ALIAS)
                 if (!alias.isNullOrEmpty()) {
                     loadSingleDeviceAlias(alias)
                 } else {
@@ -83,6 +104,7 @@ class BLEConnectionManager : Service() {
 
         return START_STICKY
     }
+
 
     @SuppressLint("MissingPermission")
     private fun loadSingleDeviceAlias(alias: String) {
@@ -221,7 +243,9 @@ class BLEConnectionManager : Service() {
                 }
 
                 val alias = macToAliasMap[mac] ?: mac
-                val connection = BleDeviceConnection(applicationContext, device, alias)
+                val connection = BleDeviceConnection(applicationContext, device, alias, selectedLayoutName)
+                // Assign layout overlay
+                connection.dataProcessor.layoutOverlayElements = layoutOverlayElements
 
                 connection.onConnected = {
                     Log.d("BLEConnectionManager", "CONNECTED: $alias")
@@ -231,24 +255,23 @@ class BLEConnectionManager : Service() {
                 connection.onDisconnected = {
                     Log.d("BLEConnectionManager", "DISCONNECTED: $alias")
                     configurationReadyToStream = false
+
+
+
                 }
 
                 // 🔽 NEW: Handle incoming data from this device
-                connection.onDataReceived = { data, alias ->
-//                    Log.d("BLEConnectionManager", "[$alias] Received ${data.size} bytes")
-
-                    // Optional: parse or forward this data to another layer
-                    // Example placeholder:
-                    // val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
-                    // val parsed = processor.convertByteToChannelData(buffer)
-                    // handleParsedData(alias, parsed)
+                connection.onDataReceived = { _, alias ->
+                    val parser = connection.dataProcessor  // or inject it explicitly
+                    val channels = DisplayDataFormatter.calculateChannelGeometry(layoutOverlayElements)
+                    val displayData = DisplayDataFormatter.extractDisplayData(parser, channels)
+                    DisplayDataFormatter.saveDisplayDataToCSV(applicationContext, displayData, "${alias}_filtered_data.csv")
                 }
 
                 activeConnections[mac] = connection
                 connection.connect()
             }
         }
-
 
         override fun onScanFailed(errorCode: Int) {
             Log.e("BLEConnectionManager", "BLE scan failed: $errorCode")
@@ -261,13 +284,17 @@ class BLEConnectionManager : Service() {
         const val COMMAND_START = "start"
         const val COMMAND_STOP = "stop"
         const val EXTRA_DEVICE_ALIAS = "device_alias"
+        const val EXTRA_LAYOUT_JSON = "layout_json"
+        var selectedLayoutName = "unknown"
 
-        fun startService(context: Context, alias: String) {
+        fun startService(context: Context, alias: String, layoutJson: String) {
             val intent = Intent(context, BLEConnectionManager::class.java).apply {
                 putExtra(EXTRA_COMMAND, COMMAND_START)
                 putExtra(EXTRA_DEVICE_ALIAS, alias)
+                putExtra(EXTRA_LAYOUT_JSON, layoutJson) // 🔽 new
             }
             context.startForegroundService(intent)
+            this.selectedLayoutName = selectedLayoutName
         }
 
         private var connectionManagerInstance: BLEConnectionManager? = null
@@ -288,12 +315,18 @@ class BLEConnectionManager : Service() {
             return returnValue
         }
 
-        fun streamFromAllDevices() {
-            connectionManagerInstance?.streamFromAllDevices()
+        fun streamFromDevice(ledIntensityValues: IntArray) {
+            connectionManagerInstance?.streamFromDevice(ledIntensityValues)
         }
 
-        fun stopStreamingFromAllDevices() {
-            connectionManagerInstance?.stopStreamingFromAllDevices()
+        fun stopStreamingFromDevice() {
+            connectionManagerInstance?.stopStreamingFromDevice()
+        }
+
+        fun broadcastStimulusEvent(event: StimulusEvent) {
+            connectionManagerInstance?.activeConnections?.values?.forEach {
+                it.logStimulusEvent(event)
+            }
         }
     }
 
