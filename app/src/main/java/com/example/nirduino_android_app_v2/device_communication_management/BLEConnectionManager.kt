@@ -22,8 +22,7 @@ import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+
 
 class BLEConnectionManager : Service() {
 
@@ -46,13 +45,29 @@ class BLEConnectionManager : Service() {
     }
 
     @SuppressLint("MissingPermission")
-    fun streamFromDevice(ledIntensityValues: IntArray) {
+    fun startStreamFromDevice(ledIntensityValues: IntArray) {
         activeConnections.values.forEach { it.streamNIRDuinoData(ledIntensityValues) }
     }
 
     @SuppressLint("MissingPermission")
     fun stopStreamingFromDevice() {
         activeConnections.values.forEach { it.stopStreamNIRDuinoData() }
+    }
+
+    fun getLatestSQIValues():List<Float> {
+        var currSQIValues = emptyList<Float>()
+        activeConnections.values.forEach {
+            currSQIValues = it.getLatestSQIScores()
+        }
+        return currSQIValues
+    }
+
+    fun getChannelDisplayData(): List<DisplayChannelData>{
+        var currentChannelDisplayData : List<DisplayChannelData> = emptyList()
+        activeConnections.values.forEach(){
+            currentChannelDisplayData = it.getChannelDisplayData()
+        }
+        return currentChannelDisplayData
     }
 
     override fun onCreate() {
@@ -278,6 +293,7 @@ class BLEConnectionManager : Service() {
         }
     }
 
+
     companion object {
         const val EXTRA_COMMAND = "command"
         const val EXTRA_CONFIG_JSON = "config_json"
@@ -315,8 +331,8 @@ class BLEConnectionManager : Service() {
             return returnValue
         }
 
-        fun streamFromDevice(ledIntensityValues: IntArray) {
-            connectionManagerInstance?.streamFromDevice(ledIntensityValues)
+        fun startStreamFromDevice(ledIntensityValues: IntArray) {
+            connectionManagerInstance?.startStreamFromDevice(ledIntensityValues)
         }
 
         fun stopStreamingFromDevice() {
@@ -328,6 +344,15 @@ class BLEConnectionManager : Service() {
                 it.logStimulusEvent(event)
             }
         }
+
+        fun getLatestSQIValues(): List<Float>? {
+            return connectionManagerInstance?.getLatestSQIValues()
+        }
+
+        fun getChannelDisplayData(): List<DisplayChannelData> {
+            return connectionManagerInstance?.getChannelDisplayData() ?: emptyList()
+        }
+
     }
 
 

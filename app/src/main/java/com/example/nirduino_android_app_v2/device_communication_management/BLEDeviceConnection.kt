@@ -19,6 +19,7 @@ class BleDeviceConnection(
     private val alias: String,
     val selectedLayoutName: String
 ) {
+
     private var bluetoothGatt: BluetoothGatt? = null
     private val handler = Handler(Looper.getMainLooper())
 
@@ -150,6 +151,14 @@ class BleDeviceConnection(
 
     fun logStimulusEvent(event: StimulusEvent) {
         dataProcessor?.handleStimulusEvent(event)
+    }
+
+    fun getLatestSQIScores(): List<Float> {
+        return dataProcessor.latestSQIScores
+    }
+
+    fun getChannelDisplayData(): List<DisplayChannelData> {
+        return dataProcessor.channelDisplayData
     }
 
     private val gattCallback = object : BluetoothGattCallback() {

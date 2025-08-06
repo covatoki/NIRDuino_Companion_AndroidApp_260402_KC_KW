@@ -6,6 +6,7 @@ import android.graphics.*
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.floor
 import kotlin.math.roundToInt
 @SuppressLint("ClickableViewAccessibility")
 class PannableGridView @JvmOverloads constructor(
@@ -50,7 +51,7 @@ class PannableGridView @JvmOverloads constructor(
                     lastTouchX = event.x
                     lastTouchY = event.y
                     draggingItem = overlays.findLast {
-                        it.contains(canvasX, canvasY, mmToPx(1f))
+                        it.contains(canvasX, canvasY, mmToPx(4f))
                     }
                 }
 
@@ -65,8 +66,8 @@ class PannableGridView @JvmOverloads constructor(
                         val rawY = (event.y - offsetY) / scaleFactor
 
                         // Snap to nearest grid
-                        val snappedX = (rawX / mmToPx(gridSpacingMm)).roundToInt() * mmToPx(gridSpacingMm)
-                        val snappedY = (rawY / mmToPx(gridSpacingMm)).roundToInt() * mmToPx(gridSpacingMm)
+                        val snappedX = floor((rawX / mmToPx(gridSpacingMm)).roundToInt() * mmToPx(gridSpacingMm))
+                        val snappedY = floor((rawY / mmToPx(gridSpacingMm)).roundToInt() * mmToPx(gridSpacingMm))
 
                         draggingItem?.x = snappedX
                         draggingItem?.y = snappedY
@@ -89,16 +90,22 @@ class PannableGridView @JvmOverloads constructor(
 
     }
 
-    private fun generateGridShader() {
-        val cellSizePx = (mmPerCell * dpi / 25.4f).toInt().coerceAtLeast(4)
+    fun generateGridShader() {
+        val baseMmPerCell = 1.0f  // 1 mm per cell
+        val cellSizePx = (mmToPx(baseMmPerCell) * scaleFactor).toInt().coerceAtLeast(1)
+
         val gridBitmap = Bitmap.createBitmap(cellSizePx, cellSizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(gridBitmap)
+
         val linePaint = Paint().apply {
             color = Color.LTGRAY
-            strokeWidth = 0.5f
+            strokeWidth = 1f
         }
+
+        // Draw top and left grid lines
         canvas.drawLine(0f, 0f, cellSizePx.toFloat(), 0f, linePaint)
         canvas.drawLine(0f, 0f, 0f, cellSizePx.toFloat(), linePaint)
+
         gridShader = BitmapShader(gridBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
         gridPaint.shader = gridShader
     }
@@ -122,11 +129,13 @@ class PannableGridView @JvmOverloads constructor(
 
     fun zoomIn() {
         scaleFactor *= 1.1f
+        generateGridShader()
         invalidate()
     }
 
     fun zoomOut() {
         scaleFactor /= 1.1f
+        generateGridShader()
         invalidate()
     }
 
@@ -161,15 +170,15 @@ class PannableGridView @JvmOverloads constructor(
         var x = 0f
         var y = 0f
         item.selectedSources.sorted().forEachIndexed { i, id ->
-            overlays.add(OverlayItem.Source(x, y, id))
-            x += mmToPx(1f)
+            overlays.add(OverlayItem.Source(mmToPx(x), mmToPx(y), id))  // convert here
+            x += mmPerCell  // step by mm, not pixels
         }
 
         x = 0f
-        y = mmToPx(1f)
+        y = mmPerCell
         item.selectedDetectors.sorted().forEachIndexed { i, id ->
-            overlays.add(OverlayItem.Detector(x, y, id))
-            x += mmToPx(1f)
+            overlays.add(OverlayItem.Detector(mmToPx(x), mmToPx(y), id))
+            x += mmPerCell
         }
 
         // 🔁 Flip after loading
@@ -190,8 +199,8 @@ class PannableGridView @JvmOverloads constructor(
     fun getOverlayElements(): List<OverlayElement> {
         return overlays.map {
             when (it) {
-                is OverlayItem.Source -> OverlayElement(it.x, it.y, true, it.id)
-                is OverlayItem.Detector -> OverlayElement(it.x, it.y, false, it.id)
+                is OverlayItem.Source -> OverlayElement(it.x / mmToPx(1f), it.y / mmToPx(1f), true, it.id)
+                is OverlayItem.Detector -> OverlayElement(it.x / mmToPx(1f), it.y / mmToPx(1f), false, it.id)
             }
         }
     }
@@ -199,16 +208,15 @@ class PannableGridView @JvmOverloads constructor(
     fun setOverlayElements(elements: List<OverlayElement>) {
         overlays.clear()
         for (e in elements) {
-            val item = if (e.isSource) OverlayItem.Source(e.x, e.y, e.id)
-            else OverlayItem.Detector(e.x, e.y, e.id)
+            val item = if (e.isSource)
+                OverlayItem.Source(mmToPx(e.x), mmToPx(e.y), e.id)
+            else
+                OverlayItem.Detector(mmToPx(e.x), mmToPx(e.y), e.id)
             overlays.add(item)
         }
 
-        // 🔁 Flip layout Y *after* loading real saved positions
         flipLayoutY()
-
         invalidate()
     }
-
 
 }

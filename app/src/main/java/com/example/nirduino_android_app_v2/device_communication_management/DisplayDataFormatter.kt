@@ -11,20 +11,15 @@ data class Channel(
     val sourceId: Int,
     val detectorId: Int,
     val distanceMm: Float,
+    val sourceX: Float,
+    val sourceY: Float,
+    val detectorX:Float,
+    val detectorY: Float,
     val x: Float,
     val y: Float,
     val type: ChannelType
-)
-
-data class DisplayChannelData(
-    val channelNumber: Int,
-    val type: ChannelType,
-    val sourceId: Int,
-    val detectorId: Int,
-    val value: Double,
-    val x: Float,
-    val y: Float
-)
+) {
+}
 
 object DisplayDataFormatter {
 
@@ -48,7 +43,7 @@ object DisplayDataFormatter {
                 val xMid = (source.x + detector.x) / 2
                 val yMid = (source.y + detector.y) / 2
 
-                channels.add(Channel(source.id, detector.id, distance, xMid, yMid, type))
+                channels.add(Channel(source.id, detector.id, distance, source.x, source.y, detector.x, detector.y, xMid, yMid, type))
             }
         }
         return channels
@@ -72,7 +67,11 @@ object DisplayDataFormatter {
                     channelNumber = channelIndex++,
                     type = channel.type,
                     sourceId = channel.sourceId,
+                    sourceX = channel.sourceX,
+                    sourceY = channel.sourceY,
                     detectorId = channel.detectorId,
+                    detectorX = channel.detectorX,
+                    detectorY = channel.detectorY,
                     value = value,
                     x = channel.x,
                     y = channel.y

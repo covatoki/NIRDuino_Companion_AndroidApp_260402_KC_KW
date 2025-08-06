@@ -11,8 +11,14 @@ import java.nio.ByteOrder
 import kotlin.math.*
 import kotlin.collections.*
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 class DataParsingAndProcessing {
+
+    val sqiFlowEmitter = MutableSharedFlow<List<Float>>(replay = 0, extraBufferCapacity = 5)
 
     private val numSources = 33
     private val numDetectors = 16
@@ -132,7 +138,7 @@ class DataParsingAndProcessing {
                     isolateSpecificChannelData(logging = false)
 
                     // Call SQI update
-                    updateSQIScores(5.0f, true)
+                    updateSQIScores(5.0f, false)
                 }
             }
             else -> return false
@@ -296,7 +302,11 @@ class DataParsingAndProcessing {
                         channelNumber = channelIndex++,
                         type = type,
                         sourceId = source.id,
+                        sourceX = source.x,
+                        sourceY = source.y,
                         detectorId = detector.id,
+                        detectorX = detector.x,
+                        detectorY = detector.y,
                         value = value,
                         x = xMid,
                         y = yMid
@@ -431,7 +441,6 @@ class DataParsingAndProcessing {
 
         return sqiScores
     }
-
 
     fun getStandardDeviation(data: List<Double>): Double {
         if (data.size < 2) return 0.0
@@ -664,6 +673,10 @@ class DataParsingAndProcessing {
                     "channelNumber" to it.channelNumber,
                     "sourceId" to it.sourceId,
                     "detectorId" to it.detectorId,
+                    "sourceX" to it.sourceX,
+                    "sourceY" to it.sourceX,
+                    "detectorX" to it.detectorX,
+                    "detectorY" to it.detectorY,
                     "x" to it.x,
                     "y" to it.y,
                     "type" to it.type.name

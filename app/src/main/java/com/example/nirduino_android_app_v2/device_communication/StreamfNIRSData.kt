@@ -23,14 +23,20 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.nirduino_android_app_v2.R
 import com.example.nirduino_android_app_v2.device_communication_management.BLEConnectionManager
+import com.example.nirduino_android_app_v2.device_communication_management.DisplayChannelData
 import com.example.nirduino_android_app_v2.device_communication_management.StimulusEvent
 import com.example.nirduino_android_app_v2.device_manager_files.KnownDeviceDataStore
 import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
+import com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement
 import com.google.gson.Gson
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.isActive
 
 class StreamfNIRSData : AppCompatActivity() {
 
@@ -48,6 +54,11 @@ class StreamfNIRSData : AppCompatActivity() {
 
     private lateinit var streamToggleButton: Button
     private var isStreaming = false
+
+    private lateinit var sqiOverlay: SignalQualityOverlay
+
+    private var pollIntervalMs: Long = 300  // Adjustable polling interval in milliseconds
+    private var sqiPollingJob: Job? = null
 
     data class StimulusLabel(
         val label: String,
@@ -74,10 +85,13 @@ class StreamfNIRSData : AppCompatActivity() {
     private var fileToTransfer: File? = null
     private lateinit var createFileLauncher: ActivityResultLauncher<Intent>
 
+    var channelDisplayData : List<DisplayChannelData> = emptyList()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_stream_fnirs_data)
 
+        sqiOverlay = findViewById(R.id.sqi_overlay)
         aliasSpinner = findViewById(R.id.spinner_aliases)
         layoutSpinner = findViewById(R.id.spinner_layouts)
         statusTextView = findViewById(R.id.text_status)
@@ -109,6 +123,9 @@ class StreamfNIRSData : AppCompatActivity() {
 
             if (!isConnected) {
                 attemptConnection(alias)
+
+                // Update visuals
+                stopPollingServiceData()
             } else {
                 BLEConnectionManager.stopService(this)
                 val redCircle = ContextCompat.getDrawable(this@StreamfNIRSData, R.drawable.red_circle)
@@ -119,10 +136,15 @@ class StreamfNIRSData : AppCompatActivity() {
                 isConnected = false
                 connectButton.text = "Connect"
 
+                // Stop connect data for updating visuals on-screen
+                stopPollingServiceData()
+                clearSignalQualityViews()
+
                 // Updated data streaming button
                 streamToggleButton.isEnabled = false
                 streamToggleButton.text = "Start Streaming"
                 isStreaming = false
+
 
             }
         }
@@ -133,40 +155,16 @@ class StreamfNIRSData : AppCompatActivity() {
                 streamToggleButton.text = "Start Streaming"
                 isStreaming = false
                 Toast.makeText(this, "Streaming stopped", Toast.LENGTH_SHORT).show()
+                stopPollingServiceData()
             } else {
-                BLEConnectionManager.streamFromDevice(ledIntensityValues)
+                BLEConnectionManager.startStreamFromDevice(ledIntensityValues)
                 streamToggleButton.text = "Stop Streaming"
                 isStreaming = true
                 Toast.makeText(this, "Streaming started", Toast.LENGTH_SHORT).show()
+                startPollingServiceData()
             }
+
         }
-
-        createFileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) {
-                val destUri = result.data?.data ?: return@registerForActivityResult
-
-                try {
-                    val inputStream = fileToTransfer!!.inputStream()
-                    val outputStream = contentResolver.openOutputStream(destUri)
-
-                    inputStream.copyTo(outputStream!!)
-                    inputStream.close()
-                    outputStream.close()
-
-                    val deleted = fileToTransfer!!.delete()
-                    Toast.makeText(
-                        this,
-                        if (deleted) "Saved and deleted original." else "Saved, but could not delete original.",
-                        Toast.LENGTH_LONG
-                    ).show()
-
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Error saving file: ${e.message}", Toast.LENGTH_LONG).show()
-                    e.printStackTrace()
-                }
-            }
-        }
-
 
     }
 
@@ -217,6 +215,40 @@ class StreamfNIRSData : AppCompatActivity() {
 
     }
 
+    private fun startPollingServiceData() {
+        sqiPollingJob?.cancel()  // kill old job
+        sqiPollingJob = lifecycleScope.launch {
+            Log.d("SQI_POLL", "⏳ Polling job started")
+
+            while (isActive) {
+                if (!isConnected) {
+                    Log.w("SQI_POLL", "❌ Stopping polling: not connected")
+                    break
+                }
+
+                val newSQI = BLEConnectionManager.getLatestSQIValues()
+                if (!newSQI.isNullOrEmpty()) {
+                    updateSignalQualityViews(newSQI)
+                } else {
+                    Log.w("SQI_POLL", "SQI list is empty or null")
+                }
+                delay(pollIntervalMs)
+            }
+        }
+    }
+
+    private fun clearSignalQualityViews() {
+        sqiOverlay.updateSQI(emptyList())  // Clear SQI and redraw
+    }
+
+    private fun stopPollingServiceData() {
+        sqiPollingJob?.cancel()
+        sqiPollingJob = null
+    }
+
+    private fun updateSignalQualityViews(sqiList: List<Float>) {
+        sqiOverlay.updateSQI(sqiList)
+    }
 
     private suspend fun setupAliasSpinner() {
         val deviceList = knownDeviceStore.getDevices().first()
@@ -248,6 +280,8 @@ class StreamfNIRSData : AppCompatActivity() {
         val layoutMap = layoutDataStore.getAllLayoutsByName()
         val layoutNames = layoutMap.keys.toList()
 
+        Log.d("LAYOUT_SPINNER", "Found ${layoutNames.size} layouts: $layoutNames")
+
         if (layoutNames.isEmpty()) {
             statusTextView.text = "No layouts found."
             layoutSpinner.isEnabled = false
@@ -263,24 +297,35 @@ class StreamfNIRSData : AppCompatActivity() {
         layoutSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 selectedLayoutName = layoutNames[position]
+                Log.d("LAYOUT_SPINNER", "Selected layout: $selectedLayoutName")
                 statusTextView.text = "Selected layout: $selectedLayoutName"
 
-                // ── Load and log overlay elements
+                // Show the layout on screen
                 lifecycleScope.launch {
+
                     val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
-                    overlays.filter { it.isSource }.forEach {
-                        Log.d("LayoutData", "Source ${it.id} → x=${it.x}, y=${it.y}")
-                    }
-                    overlays.filter { !it.isSource }.forEach {
-                        Log.d("LayoutData", "Detector ${it.id} → x=${it.x}, y=${it.y}")
-                    }
+                    val sources = overlays.filter { it.isSource }
+                    val detectors = overlays.filter { !it.isSource }
+
+                    val channelCoords = computeChannelCoordinates(overlays)
+
+                    sqiOverlay.setOverlayData(
+                        sourceList = sources,
+                        detectorList = detectors,
+                        channelList = channelCoords
+                    )
+
+                    Log.d("LAYOUT_SPINNER", "Overlay updated with ${sources.size} sources and ${detectors.size} detectors")
+
                 }
             }
 
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                Log.d("LAYOUT_SPINNER", "Nothing selected")
+            }
         }
-
     }
+
 
     private fun attemptConnection(alias: String) {
         statusTextView.text = "Connecting to $alias..."
@@ -291,10 +336,28 @@ class StreamfNIRSData : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
+
             val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
             val gson = Gson()
             val layoutJson = gson.toJson(overlays)
             BLEConnectionManager.startService(this@StreamfNIRSData, alias, layoutJson)
+
+            channelDisplayData = BLEConnectionManager.getChannelDisplayData()
+            Log.d("CHANNEL_DATA", "Loaded ${channelDisplayData.size} channels")
+
+            // Combine all overlay elements and channel coordinates
+            val sources = overlays.filter { it.isSource }
+            val detectors = overlays.filter { !it.isSource }
+
+            val channelCoords = computeChannelCoordinates(overlays)
+
+            // Normalize all together using SignalQualityOverlay's internal logic
+            sqiOverlay.setOverlayData(
+                sourceList = sources,
+                detectorList = detectors,
+                channelList = channelCoords
+            )
+
         }
 
         lifecycleScope.launch {
@@ -324,6 +387,9 @@ class StreamfNIRSData : AppCompatActivity() {
                 } else {
                     statusTextView.setCompoundDrawables(null, null, null, null)
                     statusTextView.text = "Connecting to $alias... ($it)"
+                    stopPollingServiceData()
+                    clearSignalQualityViews()
+
                 }
                 delay(500)
             }
@@ -332,9 +398,39 @@ class StreamfNIRSData : AppCompatActivity() {
             statusTextView.setCompoundDrawables(null, null, null, null)
             statusTextView.text = "❌ Failed to connect to $alias"
             showErrorDialog("Could not connect to $alias. Please ensure it is powered on and has sufficient battery.")
+
+            // Update on-screen data
+            stopPollingServiceData()
+            clearSignalQualityViews()
+
         }
 
     }
+
+    private fun computeChannelCoordinates(overlays: List<OverlayElement>): List<Triple<Float, Float, Int>> {
+        val sources = overlays.filter { it.isSource }
+        val detectors = overlays.filter { !it.isSource }
+
+        val result = mutableListOf<Triple<Float, Float, Int>>()
+        var channelIndex = 0
+
+        for (source in sources) {
+            for (detector in detectors) {
+                val dx = source.x - detector.x
+                val dy = source.y - detector.y
+                val distance = kotlin.math.hypot(dx.toDouble(), dy.toDouble())
+
+                if (distance in 28.0..31.0 || distance <= 15.0) {
+                    val xMid = (source.x + detector.x) / 2f
+                    val yMid = (source.y + detector.y) / 2f
+                    result.add(Triple(xMid, yMid, channelIndex++))
+                }
+            }
+        }
+
+        return result
+    }
+
 
     private fun isBluetoothEnabled(): Boolean {
         val manager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -352,6 +448,8 @@ class StreamfNIRSData : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        stopPollingServiceData()
 
         if (isConnected) {
             BLEConnectionManager.stopService(this)

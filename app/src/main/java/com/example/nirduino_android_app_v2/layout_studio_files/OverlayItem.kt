@@ -14,12 +14,12 @@ sealed class OverlayItem(var x: Float, var y: Float, val id: Int) {
     class Source(x: Float, y: Float, id: Int) : OverlayItem(x, y, id) {
         override fun draw(canvas: Canvas, sizePx: Float) {
             val paint = Paint().apply { color = Color.rgb(255, 165, 0) } // Orange
-            canvas.drawCircle(x, y, sizePx / 10, paint)
+            canvas.drawCircle(x, y, sizePx, paint)
 
             val textPaint = Paint().apply {
                 color = Color.BLACK
                 textAlign = Paint.Align.CENTER
-                textSize = sizePx * 0.25f
+                textSize = sizePx*2
             }
             canvas.drawText("S${toSubscript(id)}", x + sizePx * 0.15f, y - sizePx * 0.1f, textPaint)
         }
@@ -31,10 +31,10 @@ sealed class OverlayItem(var x: Float, var y: Float, val id: Int) {
 
     class Detector(x: Float, y: Float, id: Int) : OverlayItem(x, y, id) {
         override fun draw(canvas: Canvas, sizePx: Float) {
-            val rect = RectF(/* left = */ x - sizePx / 10, /* top = */
-                y - sizePx / 10, /* right = */
-                x + sizePx / 10, /* bottom = */
-                y + sizePx / 10)
+            val rect = RectF(/* left = */ x - sizePx , /* top = */
+                y - sizePx, /* right = */
+                x + sizePx, /* bottom = */
+                y + sizePx)
             val fillPaint = Paint().apply { color = Color.LTGRAY }
             val borderPaint = Paint().apply {
                 color = Color.BLACK
@@ -48,7 +48,7 @@ sealed class OverlayItem(var x: Float, var y: Float, val id: Int) {
             val textPaint = Paint().apply {
                 color = Color.BLACK
                 textAlign = Paint.Align.CENTER
-                textSize = sizePx * 0.25f
+                textSize = sizePx*2
             }
             canvas.drawText("D${toSubscript(id)}", x + sizePx * 0.20f, y - sizePx * 0.1f, textPaint)
         }
