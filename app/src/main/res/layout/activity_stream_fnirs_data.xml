@@ -106,14 +106,43 @@
         app:layout_constraintTop_toBottomOf="@id/btn_stream_toggle"
  />
 
+    <!-- Spinner row with label -->
+    <LinearLayout
+        android:id="@+id/channel_spinner_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@id/sqi_overlay">
+
+        <TextView
+            android:id="@+id/label_select_channel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select Channel:"
+            android:textSize="@dimen/font_size_header2"
+            android:layout_marginEnd="8dp" />
+
+        <Spinner
+            android:id="@+id/spinner_channels"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:spinnerMode="dropdown" />
+
+    </LinearLayout>
+
+
     <!-- Placeholder for real-time plot -->
     <com.example.nirduino_android_app_v2.device_communication.ChannelPlotView
         android:id="@+id/channel_plot_view"
         android:layout_width="match_parent"
         android:layout_height="300dp"
         android:background="#FFFAFAFA"
-        android:layout_marginTop="32dp"
-        app:layout_constraintTop_toBottomOf="@id/sqi_overlay"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@id/channel_spinner_row"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 

@@ -17,16 +17,18 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.nirduino_android_app_v2.R
 import com.example.nirduino_android_app_v2.device_communication_management.BLEConnectionManager
+import com.example.nirduino_android_app_v2.device_communication_management.ChannelType
 import com.example.nirduino_android_app_v2.device_communication_management.DisplayChannelData
+import com.example.nirduino_android_app_v2.device_communication_management.DisplayDataFormatter
 import com.example.nirduino_android_app_v2.device_communication_management.StimulusEvent
 import com.example.nirduino_android_app_v2.device_manager_files.KnownDeviceDataStore
 import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
+import com.example.nirduino_android_app_v2.layout_studio_files.LayoutStudioItem
 import com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement
 import com.google.gson.Gson
 import kotlinx.coroutines.Job
@@ -34,8 +36,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 
 class StreamfNIRSData : AppCompatActivity() {
@@ -85,7 +85,19 @@ class StreamfNIRSData : AppCompatActivity() {
     private var fileToTransfer: File? = null
     private lateinit var createFileLauncher: ActivityResultLauncher<Intent>
 
-    var channelDisplayData : List<DisplayChannelData> = emptyList()
+    var DisplayChannelData : List<DisplayChannelData> = emptyList()
+
+    private lateinit var channelSpinner: Spinner
+    private lateinit var channelPlotView: ChannelPlotView
+
+    var sources : List<OverlayElement> = emptyList()
+    var detectors : List<OverlayElement> = emptyList()
+    var channelCoords : List<DisplayChannelData> = emptyList()
+
+    enum class ChannelType { LONG, SHORT }
+
+    var layoutMap: Map<String, LayoutStudioItem> = emptyMap()
+    var layoutNames: List<String> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,9 +114,17 @@ class StreamfNIRSData : AppCompatActivity() {
         knownDeviceStore = KnownDeviceDataStore.getInstance(applicationContext)
         layoutDataStore = LayoutDataStore.getInstance(applicationContext)
 
+        channelSpinner = findViewById(R.id.spinner_channels)
+        channelPlotView = findViewById(R.id.channel_plot_view)
+
         lifecycleScope.launch {
+
+            layoutMap = layoutDataStore.getAllLayoutsByName()
+            layoutNames = layoutMap.keys.toList()
+
             setupAliasSpinner()
             setupLayoutSpinner()
+            setupChannelSpinner()
         }
 
         stimulusBar = findViewById(R.id.stimulus_bar)
@@ -161,6 +181,7 @@ class StreamfNIRSData : AppCompatActivity() {
                 streamToggleButton.text = "Stop Streaming"
                 isStreaming = true
                 Toast.makeText(this, "Streaming started", Toast.LENGTH_SHORT).show()
+
                 startPollingServiceData()
             }
 
@@ -277,8 +298,6 @@ class StreamfNIRSData : AppCompatActivity() {
     }
 
     private suspend fun setupLayoutSpinner() {
-        val layoutMap = layoutDataStore.getAllLayoutsByName()
-        val layoutNames = layoutMap.keys.toList()
 
         Log.d("LAYOUT_SPINNER", "Found ${layoutNames.size} layouts: $layoutNames")
 
@@ -296,6 +315,7 @@ class StreamfNIRSData : AppCompatActivity() {
 
         layoutSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+
                 selectedLayoutName = layoutNames[position]
                 Log.d("LAYOUT_SPINNER", "Selected layout: $selectedLayoutName")
                 statusTextView.text = "Selected layout: $selectedLayoutName"
@@ -303,11 +323,13 @@ class StreamfNIRSData : AppCompatActivity() {
                 // Show the layout on screen
                 lifecycleScope.launch {
 
-                    val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
-                    val sources = overlays.filter { it.isSource }
-                    val detectors = overlays.filter { !it.isSource }
+                    BLEConnectionManager.setLayoutName(selectedLayoutName!!)
 
-                    val channelCoords = computeChannelCoordinates(overlays)
+                    val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
+                    sources = overlays.filter { it.isSource }
+                    detectors = overlays.filter { !it.isSource }
+
+                    channelCoords = BLEConnectionManager.getChannelDisplayData()
 
                     sqiOverlay.setOverlayData(
                         sourceList = sources,
@@ -315,14 +337,50 @@ class StreamfNIRSData : AppCompatActivity() {
                         channelList = channelCoords
                     )
 
+                    Log.d("CHANNEL_DATA", "Loaded ${channelCoords.size} channels")
+
+                    //
+                    val channelLabels = channelCoords.mapIndexed { index, _ -> "Ch ${channelCoords[index].channelNumber+1} (${channelCoords[index].type})" }
+
+                    channelSpinner.adapter = ArrayAdapter(
+                        this@StreamfNIRSData,
+                        android.R.layout.simple_spinner_dropdown_item,
+                        channelLabels
+                    )
+
+                    channelLabels.forEachIndexed { index, label ->
+                        val coord = channelCoords[index]
+                        Log.d("ChannelInfo", "$label → Coord = (${coord.x}, ${coord.y}), Index = ${coord.channelNumber+1}, Index = ${coord.type}")
+                    }
+
                     Log.d("LAYOUT_SPINNER", "Overlay updated with ${sources.size} sources and ${detectors.size} detectors")
 
                 }
+
+                setupChannelSpinner()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
                 Log.d("LAYOUT_SPINNER", "Nothing selected")
             }
+        }
+    }
+
+    private fun setupChannelSpinner(){
+
+        channelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+
+                Log.d("ChannelSpinner", "Spinner selection updated")
+
+                val currChannel = channelCoords.get(position)
+
+                Log.d("ChannelSpinner",  (currChannel.channelNumber+1).toString() + " , " + currChannel.type.toString() + " Source: " + sources.get(position).id.toString() + " , Detector " + detectors.get(position).id.toString())
+
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
 
@@ -341,22 +399,6 @@ class StreamfNIRSData : AppCompatActivity() {
             val gson = Gson()
             val layoutJson = gson.toJson(overlays)
             BLEConnectionManager.startService(this@StreamfNIRSData, alias, layoutJson)
-
-            channelDisplayData = BLEConnectionManager.getChannelDisplayData()
-            Log.d("CHANNEL_DATA", "Loaded ${channelDisplayData.size} channels")
-
-            // Combine all overlay elements and channel coordinates
-            val sources = overlays.filter { it.isSource }
-            val detectors = overlays.filter { !it.isSource }
-
-            val channelCoords = computeChannelCoordinates(overlays)
-
-            // Normalize all together using SignalQualityOverlay's internal logic
-            sqiOverlay.setOverlayData(
-                sourceList = sources,
-                detectorList = detectors,
-                channelList = channelCoords
-            )
 
         }
 
@@ -406,31 +448,6 @@ class StreamfNIRSData : AppCompatActivity() {
         }
 
     }
-
-    private fun computeChannelCoordinates(overlays: List<OverlayElement>): List<Triple<Float, Float, Int>> {
-        val sources = overlays.filter { it.isSource }
-        val detectors = overlays.filter { !it.isSource }
-
-        val result = mutableListOf<Triple<Float, Float, Int>>()
-        var channelIndex = 0
-
-        for (source in sources) {
-            for (detector in detectors) {
-                val dx = source.x - detector.x
-                val dy = source.y - detector.y
-                val distance = kotlin.math.hypot(dx.toDouble(), dy.toDouble())
-
-                if (distance in 28.0..31.0 || distance <= 15.0) {
-                    val xMid = (source.x + detector.x) / 2f
-                    val yMid = (source.y + detector.y) / 2f
-                    result.add(Triple(xMid, yMid, channelIndex++))
-                }
-            }
-        }
-
-        return result
-    }
-
 
     private fun isBluetoothEnabled(): Boolean {
         val manager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager

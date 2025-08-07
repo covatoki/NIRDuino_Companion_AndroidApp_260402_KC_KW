@@ -277,9 +277,7 @@ class BLEConnectionManager : Service() {
 
                 // 🔽 NEW: Handle incoming data from this device
                 connection.onDataReceived = { _, alias ->
-                    val parser = connection.dataProcessor  // or inject it explicitly
-                    val channels = DisplayDataFormatter.calculateChannelGeometry(layoutOverlayElements)
-                    val displayData = DisplayDataFormatter.extractDisplayData(parser, channels)
+                    val displayData = connection.dataProcessor.channelDisplayData
                     DisplayDataFormatter.saveDisplayDataToCSV(applicationContext, displayData, "${alias}_filtered_data.csv")
                 }
 
@@ -351,6 +349,11 @@ class BLEConnectionManager : Service() {
 
         fun getChannelDisplayData(): List<DisplayChannelData> {
             return connectionManagerInstance?.getChannelDisplayData() ?: emptyList()
+        }
+
+        fun setLayoutName(layoutName:String){
+            selectedLayoutName = layoutName
+
         }
 
     }

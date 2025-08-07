@@ -5,6 +5,7 @@ import android.graphics.*
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
+import com.example.nirduino_android_app_v2.device_communication_management.DisplayChannelData
 import com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement
 
 class SignalQualityOverlay @JvmOverloads constructor(
@@ -13,8 +14,12 @@ class SignalQualityOverlay @JvmOverloads constructor(
 
     var sources: List<OverlayElement> = emptyList()
     var detectors: List<OverlayElement> = emptyList()
-    var channelPositions: List<Triple<Float, Float, Int>> = emptyList()
+    var channelPositions: List<DisplayChannelData> = emptyList()
     var sqiList: List<Float> = emptyList()
+
+    enum class ChannelType {
+        LONG, SHORT
+    }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
@@ -25,11 +30,11 @@ class SignalQualityOverlay @JvmOverloads constructor(
     fun setOverlayData(
         sourceList: List<OverlayElement>,
         detectorList: List<OverlayElement>,
-        channelList: List<Triple<Float, Float, Int>>
+        channelList: List<DisplayChannelData>
     ) {
         // Collect all X and Y values across sources, detectors, and channels
-        val allX = (sourceList + detectorList).map { it.x } + channelList.map { it.first }
-        val allY = (sourceList + detectorList).map { it.y } + channelList.map { it.second }
+        val allX = (sourceList + detectorList).map { it.x } + channelList.map { it.x }
+        val allY = (sourceList + detectorList).map { it.y } + channelList.map { it.y }
 
         val minX = allX.minOrNull() ?: 0f
         val maxX = allX.maxOrNull() ?: 1f
@@ -45,7 +50,7 @@ class SignalQualityOverlay @JvmOverloads constructor(
 
         sources = sourceList.map { it.copy(x = normalizeX(it.x), y = normalizeY(it.y)) }
         detectors = detectorList.map { it.copy(x = normalizeX(it.x), y = normalizeY(it.y)) }
-        channelPositions = channelList.map { (x, y, ch) -> Triple(normalizeX(x), normalizeY(y), ch) }
+        channelPositions = channelList.map { it.copy(x = normalizeX(it.x), y = normalizeY(it.y) ) }
 
         invalidate()
     }
@@ -58,8 +63,9 @@ class SignalQualityOverlay @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
+        Log.d("SQI_OVERLAY_ONDRAW", sqiList.toString())
+
         canvas.drawColor(Color.WHITE)
-        Log.d("SQI_OVERLAY_ONDRAW", "Canvas size = ${width},${height}")
 
         // Draw sources (gray circles)
         paint.color = Color.LTGRAY
@@ -80,15 +86,12 @@ class SignalQualityOverlay @JvmOverloads constructor(
             canvas.drawRect(x - size / 2, y - size / 2, x + size / 2, y + size / 2, paint)
         }
 
-        Log.d("channelList", channelPositions.size.toString())
+//        Log.d("SQI_OVERLAY_ONDRAW_channelList", channelPositions.size.toString())
 
         // Draw channels (diamond shape) with SQI
-        channelPositions.forEachIndexed { i, (xNorm, yNorm, chNum) ->
-            val x = xNorm * width
-            val y = yNorm * height
-
-            var coordinateString = x.toString() + " , "  + y.toString()
-//            Log.d("channelCoordinates", coordinateString)
+        channelPositions.forEachIndexed { i, channelData ->
+            val x = channelData.x * width
+            val y = channelData.y * height
 
             val sqi = sqiList.getOrNull(i) ?: 0f
             val color = when {
@@ -97,6 +100,7 @@ class SignalQualityOverlay @JvmOverloads constructor(
                 else -> Color.parseColor("#44AA99") // green-accessible
             }
 
+            // Draw diamond for channel
             paint.color = color
             val path = Path().apply {
                 moveTo(x, y - 10f)
@@ -107,10 +111,11 @@ class SignalQualityOverlay @JvmOverloads constructor(
             }
             canvas.drawPath(path, paint)
 
+            // Draw label
             paint.color = Color.BLACK
             paint.textSize = 20f
-            var channelNumber = chNum + 1
-            canvas.drawText("C$channelNumber", x+10f, y + 20f, paint)
+            canvas.drawText("C${channelData.channelNumber + 1}", x + 10f, y + 20f, paint)
         }
+
     }
 }

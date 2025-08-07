@@ -131,13 +131,16 @@ class DataParsingAndProcessing {
                 isDataSet4Ready = false
 
                 if (isDataReady) {
+
                     logDataPoint()
+
+                    // Extract the long and short channels using the layout data
                     extractfNIRSChannelDataUsingLayout()
 
-                    // Get layout specific channels
+                    // Get the relevant fNIRS data for the channels
                     isolateSpecificChannelData(logging = false)
 
-                    // Call SQI update
+                    // Get the SQI scores for the relevant channels
                     updateSQIScores(5.0f, false)
                 }
             }
@@ -247,7 +250,8 @@ class DataParsingAndProcessing {
         return outputVoltage / pgaValue
     }
 
-    private fun extractfNIRSChannelDataUsingLayout() {
+    fun extractfNIRSChannelDataUsingLayout() {
+
         if (!::layoutOverlayElements.isInitialized) {
             Log.e("DataParsing", "Layout overlay not initialized!")
             return
@@ -271,6 +275,7 @@ class DataParsingAndProcessing {
 
         for (source in sources) {
             for (detector in detectors) {
+
                 val dx = source.x - detector.x
                 val dy = source.y - detector.y
                 val distance = hypot(dx.toDouble(), dy.toDouble())
@@ -316,9 +321,9 @@ class DataParsingAndProcessing {
         }
 
         timestampSeconds += durationDataRoundSeconds
+
         channelDisplayData = result
 
-        accumulatedDataForSQI.add(result.map { it.value })
     }
 
     fun getBufferedDataSQI(windowSeconds: Float = 5.0f): Triple<List<Float>, List<List<Float>>, List<List<Float>>> {
@@ -543,7 +548,6 @@ class DataParsingAndProcessing {
                     valuesLine.append(", Ch${channel.channelNumber}IR: %.3f".format(ir))
                 }
 
-
             }
             else{
 
@@ -564,7 +568,7 @@ class DataParsingAndProcessing {
 
         }
 
-        // Already present:
+        // Append the latest time stamp to the current round's fNIRS data
         appendSampleToCurrentRound(timestampSeconds, redData, irData)
 
         // Add this below:

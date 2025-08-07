@@ -30,11 +30,11 @@
 
         <Button
             android:id="@+id/saveButton"
-            android:layout_width="0dp"
+            android:layout_width="55dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Save"
             android:background="@color/colorAccentValue"
+            android:text="Save"
             android:textColor="#FFFFFF" />
 
         <Space
