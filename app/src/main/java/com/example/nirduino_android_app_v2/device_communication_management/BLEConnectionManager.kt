@@ -23,7 +23,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-
 class BLEConnectionManager : Service() {
 
     private val serviceScope = HandlerThread("BLEServiceThread").apply { start() }
@@ -60,6 +59,14 @@ class BLEConnectionManager : Service() {
             currSQIValues = it.getLatestSQIScores()
         }
         return currSQIValues
+    }
+
+    fun getLatestfNIRSdata():List<DataRound>{
+        var currfNIRSData = emptyList<DataRound>()
+        activeConnections.values.forEach(){
+            currfNIRSData = it.dataProcessor.roundWiseData
+        }
+        return currfNIRSData
     }
 
     fun getChannelDisplayData(): List<DisplayChannelData>{
@@ -259,8 +266,8 @@ class BLEConnectionManager : Service() {
 
                 val alias = macToAliasMap[mac] ?: mac
                 val connection = BleDeviceConnection(applicationContext, device, alias, selectedLayoutName)
-                // Assign layout overlay
-                connection.dataProcessor.layoutOverlayElements = layoutOverlayElements
+
+                updateLayoutOverlayElements(connection)
 
                 connection.onConnected = {
                     Log.d("BLEConnectionManager", "CONNECTED: $alias")
@@ -270,8 +277,6 @@ class BLEConnectionManager : Service() {
                 connection.onDisconnected = {
                     Log.d("BLEConnectionManager", "DISCONNECTED: $alias")
                     configurationReadyToStream = false
-
-
 
                 }
 
@@ -291,6 +296,10 @@ class BLEConnectionManager : Service() {
         }
     }
 
+    fun updateLayoutOverlayElements(connection: BleDeviceConnection){
+        // Assign layout overlay
+        connection.dataProcessor.layoutOverlayElements = layoutOverlayElements
+    }
 
     companion object {
         const val EXTRA_COMMAND = "command"
@@ -329,8 +338,9 @@ class BLEConnectionManager : Service() {
             return returnValue
         }
 
-        fun startStreamFromDevice(ledIntensityValues: IntArray) {
+        fun startStreamFromDevice(ledIntensityValues: IntArray, layoutName: String) {
             connectionManagerInstance?.startStreamFromDevice(ledIntensityValues)
+            selectedLayoutName = layoutName
         }
 
         fun stopStreamingFromDevice() {
@@ -353,7 +363,10 @@ class BLEConnectionManager : Service() {
 
         fun setLayoutName(layoutName:String){
             selectedLayoutName = layoutName
+        }
 
+        fun getLatestfNIRSData():List<DataRound>{
+            return connectionManagerInstance?.getLatestfNIRSdata() ?: emptyList()
         }
 
     }

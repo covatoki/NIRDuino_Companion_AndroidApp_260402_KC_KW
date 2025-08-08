@@ -50,19 +50,6 @@ class DataParsingAndProcessing {
     private val bufferedRedSamples = mutableListOf<List<Float>>()
     private val bufferedIrSamples = mutableListOf<List<Float>>()
 
-    data class DataRound(
-        val timestamps: MutableList<Float>,
-        val redData: MutableList<List<Float>>,
-        val irData: MutableList<List<Float>>,
-        val stimuli: MutableList<Stimulus> = mutableListOf()
-    )
-
-    data class Stimulus(
-        val label: String,
-        val onset: Float,
-        var duration: Float
-    )
-
     private val currentRound: DataRound?
         get() = roundWiseData.lastOrNull()
 

@@ -19,10 +19,12 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.get
 import androidx.lifecycle.lifecycleScope
 import com.example.nirduino_android_app_v2.R
 import com.example.nirduino_android_app_v2.device_communication_management.BLEConnectionManager
 import com.example.nirduino_android_app_v2.device_communication_management.ChannelType
+import com.example.nirduino_android_app_v2.device_communication_management.DataRound
 import com.example.nirduino_android_app_v2.device_communication_management.DisplayChannelData
 import com.example.nirduino_android_app_v2.device_communication_management.DisplayDataFormatter
 import com.example.nirduino_android_app_v2.device_communication_management.StimulusEvent
@@ -65,6 +67,8 @@ class StreamfNIRSData : AppCompatActivity() {
         var isActive: Boolean = false,
         var onsetTime: Float = 0f
     )
+
+    var fNIRSData:List<DataRound> = emptyList()
 
     var ledIntensityValues: IntArray = intArrayOf(
         1,
@@ -177,7 +181,11 @@ class StreamfNIRSData : AppCompatActivity() {
                 Toast.makeText(this, "Streaming stopped", Toast.LENGTH_SHORT).show()
                 stopPollingServiceData()
             } else {
-                BLEConnectionManager.startStreamFromDevice(ledIntensityValues)
+                selectedLayoutName?.let { it1 ->
+                    BLEConnectionManager.startStreamFromDevice(ledIntensityValues,
+                        it1
+                    )
+                }
                 streamToggleButton.text = "Stop Streaming"
                 isStreaming = true
                 Toast.makeText(this, "Streaming started", Toast.LENGTH_SHORT).show()
@@ -242,11 +250,14 @@ class StreamfNIRSData : AppCompatActivity() {
             Log.d("SQI_POLL", "⏳ Polling job started")
 
             while (isActive) {
+
+                // Check if device is connected
                 if (!isConnected) {
                     Log.w("SQI_POLL", "❌ Stopping polling: not connected")
                     break
                 }
 
+                // Get the latest SQI data and update on-screen visuals
                 val newSQI = BLEConnectionManager.getLatestSQIValues()
                 if (!newSQI.isNullOrEmpty()) {
                     updateSignalQualityViews(newSQI)
@@ -254,6 +265,11 @@ class StreamfNIRSData : AppCompatActivity() {
                     Log.w("SQI_POLL", "SQI list is empty or null")
                 }
                 delay(pollIntervalMs)
+
+                // Get the latest fNIRS data and update on-screen visuals
+                fNIRSData = BLEConnectionManager.getLatestfNIRSData()
+                Log.d("POLLING_DATA", fNIRSData.toString())
+
             }
         }
     }
@@ -313,57 +329,81 @@ class StreamfNIRSData : AppCompatActivity() {
             layoutNames
         )
 
+        layoutSpinner.setSelection(0)  // Will t
+        selectedLayoutName = layoutNames[0]
+
+        BLEConnectionManager.setLayoutName(selectedLayoutName!!)
+
+        val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
+        sources = overlays.filter { it.isSource }
+        detectors = overlays.filter { !it.isSource }
+
+        channelCoords = BLEConnectionManager.getChannelDisplayData()
+
+        sqiOverlay.setOverlayData(
+            sourceList = sources,
+            detectorList = detectors,
+            channelList = channelCoords
+        )
+
         layoutSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
 
-                selectedLayoutName = layoutNames[position]
-                Log.d("LAYOUT_SPINNER", "Selected layout: $selectedLayoutName")
-                statusTextView.text = "Selected layout: $selectedLayoutName"
+                    layoutInit(position)
 
-                // Show the layout on screen
-                lifecycleScope.launch {
-
-                    BLEConnectionManager.setLayoutName(selectedLayoutName!!)
-
-                    val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
-                    sources = overlays.filter { it.isSource }
-                    detectors = overlays.filter { !it.isSource }
-
-                    channelCoords = BLEConnectionManager.getChannelDisplayData()
-
-                    sqiOverlay.setOverlayData(
-                        sourceList = sources,
-                        detectorList = detectors,
-                        channelList = channelCoords
-                    )
-
-                    Log.d("CHANNEL_DATA", "Loaded ${channelCoords.size} channels")
-
-                    //
-                    val channelLabels = channelCoords.mapIndexed { index, _ -> "Ch ${channelCoords[index].channelNumber+1} (${channelCoords[index].type})" }
-
-                    channelSpinner.adapter = ArrayAdapter(
-                        this@StreamfNIRSData,
-                        android.R.layout.simple_spinner_dropdown_item,
-                        channelLabels
-                    )
-
-                    channelLabels.forEachIndexed { index, label ->
-                        val coord = channelCoords[index]
-                        Log.d("ChannelInfo", "$label → Coord = (${coord.x}, ${coord.y}), Index = ${coord.channelNumber+1}, Index = ${coord.type}")
-                    }
-
-                    Log.d("LAYOUT_SPINNER", "Overlay updated with ${sources.size} sources and ${detectors.size} detectors")
-
-                }
-
-                setupChannelSpinner()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
                 Log.d("LAYOUT_SPINNER", "Nothing selected")
             }
         }
+    }
+
+    fun layoutInit(position:Int){
+
+        selectedLayoutName = layoutNames[position]
+        Log.d("LAYOUT_SPINNER", "Selected layout: $selectedLayoutName")
+        statusTextView.text = "Selected layout: $selectedLayoutName"
+
+        // Show the layout on screen
+        lifecycleScope.launch {
+
+            BLEConnectionManager.setLayoutName(selectedLayoutName!!)
+
+            val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
+            sources = overlays.filter { it.isSource }
+            detectors = overlays.filter { !it.isSource }
+
+            channelCoords = BLEConnectionManager.getChannelDisplayData()
+
+            sqiOverlay.setOverlayData(
+                sourceList = sources,
+                detectorList = detectors,
+                channelList = channelCoords
+            )
+
+            Log.d("CHANNEL_DATA", "Loaded ${channelCoords.size} channels")
+
+            //
+            val channelLabels = channelCoords.mapIndexed { index, _ -> "Ch ${channelCoords[index].channelNumber+1} (${channelCoords[index].type})" }
+
+            channelSpinner.adapter = ArrayAdapter(
+                this@StreamfNIRSData,
+                android.R.layout.simple_spinner_dropdown_item,
+                channelLabels
+            )
+
+            channelLabels.forEachIndexed { index, label ->
+                val coord = channelCoords[index]
+                Log.d("ChannelInfo", "$label → Coord = (${coord.x}, ${coord.y}), Index = ${coord.channelNumber+1}, Index = ${coord.type}")
+            }
+
+            Log.d("LAYOUT_SPINNER", "Overlay updated with ${sources.size} sources and ${detectors.size} detectors")
+
+        }
+
+        setupChannelSpinner()
+
     }
 
     private fun setupChannelSpinner(){
@@ -422,7 +462,8 @@ class StreamfNIRSData : AppCompatActivity() {
                     isConnected = true
                     connectButton.text = "Disconnect"
 
-
+                    // Update the
+                    layoutInit(0)
 
                     return@launch
 

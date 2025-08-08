@@ -260,8 +260,6 @@ class BleDeviceConnection(
             }
         }
 
-
-
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
             super.onMtuChanged(gatt, mtu, status)
