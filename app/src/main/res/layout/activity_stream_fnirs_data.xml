@@ -89,24 +89,41 @@
     <LinearLayout
         android:id="@+id/timerBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:orientation="horizontal"
         app:layout_constraintTop_toBottomOf="@id/text_status"
         app:layout_constraintBottom_toTopOf="@id/btn_stream_toggle"
-        android:layout_margin="@dimen/font_size_footnote">
+        android:layout_margin="@dimen/font_size_footnote"
+        android:weightSum="3">
+
+        <!-- Status Text -->
+        <ImageView
+            android:id="@+id/image_signal"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/signal_level2"
+            android:layout_weight="1"
+            app:tint="@color/colorAccentValue" />
 
         <!-- Status Text -->
         <TextView
             android:id="@+id/text_timer"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text=""
             app:layout_constraintTop_toBottomOf="@id/group_device_layout"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
             android:textSize="@dimen/font_size_header2"
             android:textStyle="italic|bold"
-            android:textAlignment="center"/>
+            android:textAlignment="center"
+            android:layout_weight="1"/>
+
+        <ImageView
+            android:id="@+id/image_battery"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/battery_level5"
+            android:layout_weight="1"
+            app:tint="@color/colorPrimaryValue" />
 
     </LinearLayout>
 

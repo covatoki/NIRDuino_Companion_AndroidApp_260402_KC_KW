@@ -507,7 +507,7 @@ class StreamfNIRSData : AppCompatActivity() {
 
         selectedLayoutName = layoutNames[position]
         Log.d("LAYOUT_SPINNER", "Selected layout: $selectedLayoutName")
-        statusTextView.text = "Selected layout: $selectedLayoutName"
+//        statusTextView.text = "Selected layout: $selectedLayoutName"
 
         // Show the layout on screen
         lifecycleScope.launch {
