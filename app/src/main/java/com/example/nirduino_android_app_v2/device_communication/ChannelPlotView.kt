@@ -45,26 +45,59 @@ class ChannelPlotView @JvmOverloads constructor(
     // Configure the rolling window (seconds)
     var windowSeconds: Float = 30f
 
+    // === Stimulus highlight data ===
+    private data class StimulusInterval(val label: String, val start: Float, var end: Float? = null)
+
+    private val stimIntervals = mutableListOf<StimulusInterval>() // all events ever recorded
+    private var stimPalette: Map<String, Int> = emptyMap()        // label -> base color
+
+    // single fill paint reused for bands
+    private val bandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        // alpha set per-color below
+    }
+
+    fun setStimulusPalette(palette: Map<String, Int>) {
+        stimPalette = palette.toMap()
+        invalidate()
+    }
+
+    /** Record a start/stop event with plot-time `t` (same timebase as your data). */
+    fun addStimulusEvent(label: String, isStart: Boolean, t: Float) {
+        if (isStart) {
+            // start a new open interval
+            stimIntervals.add(StimulusInterval(label, start = t, end = null))
+        } else {
+            // close the most recent open interval for this label
+            for (i in stimIntervals.size - 1 downTo 0) {
+                val itv = stimIntervals[i]
+                if (itv.label == label && itv.end == null) {
+                    itv.end = t
+                    break
+                }
+            }
+        }
+        invalidate()
+    }
+
     fun updateData(timestamps: List<Float>, redSeries: List<Float>, irSeries: List<Float>) {
-        // 1) Guard
         if (timestamps.isEmpty() || redSeries.size != timestamps.size || irSeries.size != timestamps.size) return
 
-        // 2) If timestamps jump backwards → new round → keep only latest increasing suffix
+        // Keep only the latest increasing suffix
         var start = 0
         for (i in 1 until timestamps.size) {
             if (timestamps[i] < timestamps[i - 1]) start = i
         }
+        val t = timestamps.subList(start, timestamps.size)
+        val r = redSeries.subList(start, redSeries.size)
+        val iR = irSeries.subList(start, irSeries.size)
 
-        var t = timestamps.subList(start, timestamps.size)
-        var r = redSeries.subList(start, redSeries.size)
-        var iR = irSeries.subList(start, irSeries.size)
-
-        // 3) Moving window: keep only last `windowSeconds`
+        // Moving window
         val tLast = t.last()
         val cutoff = tLast - windowSeconds
         val firstIdx = t.indexOfFirst { it >= cutoff }.let { if (it == -1) 0 else it }
 
-        ts = t.subList(firstIdx, t.size)
+        ts  = t.subList(firstIdx, t.size)
         red = r.subList(firstIdx, r.size)
         ir  = iR.subList(firstIdx, iR.size)
 
@@ -86,13 +119,49 @@ class ChannelPlotView @JvmOverloads constructor(
         val tMin = ts.first()
         val tMax = ts.last()
         val eps = 1e-6f
+
+        // Y limits strictly from data
         val yMin = min(red.minOrNull() ?: 0f, ir.minOrNull() ?: 0f)
         val yMax = max(red.maxOrNull() ?: 1f, ir.maxOrNull() ?: 1f)
 
         fun xAt(t: Float) = paddingLeft + ((t - tMin) / (tMax - tMin + eps)) * plotWidth
         fun yAt(v: Float) = paddingTop + plotHeight * (1f - ((v - yMin) / (yMax - yMin + eps)))
 
-        // ---- Ticks & labels only (no full axes) ----
+        // ---- Draw stimulus highlight bands (behind curves) ----
+        // Determine which labels have any overlap in the visible window
+        val labelsInWindow = linkedSetOf<String>()
+        for (itv in stimIntervals) {
+            val s = max(itv.start, tMin)
+            val e = min(itv.end ?: tMax, tMax)
+            if (e > s) labelsInWindow.add(itv.label)
+        }
+
+        if (labelsInWindow.isNotEmpty()) {
+            val bandHeight = plotHeight / labelsInWindow.size
+            var i = 0
+            for (label in labelsInWindow) {
+                val topY = paddingTop + bandHeight * i
+                val botY = topY + bandHeight
+
+                val baseColor = (stimPalette[label] ?: Color.GRAY)
+                // alpha 0.25
+                val bandColor = (baseColor and 0x00FFFFFF) or (0x40 shl 24) // 0x40 ≈ 64/255 ≈ 0.25
+                bandPaint.color = bandColor
+
+                // draw each overlapping interval for this label
+                for (itv in stimIntervals) {
+                    if (itv.label != label) continue
+                    val startX = xAt(max(itv.start, tMin))
+                    val endX   = xAt(min(itv.end ?: tMax, tMax))
+                    if (endX > startX) {
+                        canvas.drawRect(startX, topY, endX, botY, bandPaint)
+                    }
+                }
+                i++
+            }
+        }
+
+        // ---- Ticks & labels ----
         val yTicks = 5
         for (k in 0..yTicks) {
             val yVal = yMin + k * (yMax - yMin) / yTicks
@@ -110,11 +179,11 @@ class ChannelPlotView @JvmOverloads constructor(
             canvas.drawText(String.format("%.1f", tVal), xPix - 18f, xBase + 28f, labelPaint)
         }
 
-        // ---- Small “text boxes” for axis titles ----
+        // ---- Axis titles ----
         drawTextBox(canvas, "Raw Voltage (V)", 2f, paddingTop - 30f, axisTitlePaint, legendBgPaint, Paint.Align.LEFT)
         drawTextBox(canvas, "Time (s)", width - paddingRight/2, xBase + 60f, axisTitlePaint, legendBgPaint, Paint.Align.RIGHT)
 
-        // ---- Legend (stacked) ----
+        // ---- Legend ----
         val legendX = width - paddingRight - 140f
         val legendTop = paddingTop + 6f
         drawLegendEntry(canvas, legendX, legendTop, "Red", redPaint)
@@ -131,6 +200,7 @@ class ChannelPlotView @JvmOverloads constructor(
             return p
         }
 
+        // Draw curves on top of highlights
         canvas.drawPath(buildPath(red), redPaint)
         canvas.drawPath(buildPath(ir), irPaint)
     }
@@ -144,7 +214,6 @@ class ChannelPlotView @JvmOverloads constructor(
 
         val padH = 8f; val padV = 4f
         val fm = paint.fontMetrics
-        val textH = fm.bottom - fm.top
         val textW = paint.measureText(text)
 
         val rect = when (align) {

@@ -49,6 +49,11 @@ class BLEConnectionManager : Service() {
     }
 
     @SuppressLint("MissingPermission")
+    fun getBatteryLevelFromDevice(){
+        activeConnections.values.forEach { it.requestDeviceForBatteryLevel() }
+    }
+
+    @SuppressLint("MissingPermission")
     fun stopStreamingFromDevice() {
         activeConnections.values.forEach { it.stopStreamNIRDuinoData() }
     }
@@ -342,6 +347,10 @@ class BLEConnectionManager : Service() {
         fun startStreamFromDevice(ledIntensityValues: IntArray, layoutName: String) {
             connectionManagerInstance?.startStreamFromDevice(ledIntensityValues)
             selectedLayoutName = layoutName
+        }
+
+        fun getDeviceBatteryLevel(){
+            connectionManagerInstance?.getBatteryLevelFromDevice()
         }
 
         fun stopStreamingFromDevice() {

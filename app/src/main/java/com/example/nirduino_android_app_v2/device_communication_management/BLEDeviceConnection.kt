@@ -116,6 +116,27 @@ class BleDeviceConnection(
         dataProcessor.resetTimeStamps();
     }
 
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun requestDeviceForBatteryLevel() {
+
+        val service = bluetoothGatt?.getService(FNIRS_SERVICE_UUID)
+        val characteristic = service?.getCharacteristic(LED_CHARACTERISTIC_UUID)
+        if (characteristic == null) {
+            Log.e("BleDeviceConnection", "LED characteristic not found.")
+            return
+        }
+        val value = hexStringToByteArray("09")
+        val success = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            bluetoothGatt?.writeCharacteristic(characteristic, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) ?: false
+        } else {
+            characteristic.value = value
+            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            bluetoothGatt?.writeCharacteristic(characteristic) ?: false
+        }
+
+    }
+
     fun hexStringToByteArray(s: String): ByteArray {
         val len = s.length
         val data = ByteArray(len / 2)
@@ -173,6 +194,7 @@ class BleDeviceConnection(
         Log.d("BleDeviceConnectionRSSI", "REQUESTED")
         bluetoothGatt?.readRemoteRssi()
     }
+
 
     private val gattCallback = object : BluetoothGattCallback() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)

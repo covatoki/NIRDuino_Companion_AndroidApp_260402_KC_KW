@@ -101,6 +101,9 @@ class StreamfNIRSData : AppCompatActivity() {
         Color.parseColor("#8A2F7A")  // dark magenta/purple
     )
 
+    // Label -> ARGB color used for highlights and button tints
+    private val stimulusColorMap = linkedMapOf<String, Int>()
+
     // Expose as a list to send to ChannelPlotView later
     val STIM_COLOR_LIST: List<Int> get() = STIM_COLORS.toList()
 
@@ -183,6 +186,7 @@ class StreamfNIRSData : AppCompatActivity() {
         }
 
         connectButton.setOnClickListener {
+
             val alias = selectedAlias
             if (alias == null || selectedLayoutName == null) {
                 showErrorDialog("Please select both a device and a layout.")
@@ -191,9 +195,6 @@ class StreamfNIRSData : AppCompatActivity() {
 
             if (!isConnected) {
                 attemptConnection(alias)
-
-                // Update visuals
-                stopPollingServiceData()
             } else {
                 BLEConnectionManager.stopService(this)
                 val redCircle = ContextCompat.getDrawable(this@StreamfNIRSData, R.drawable.red_circle)
@@ -211,7 +212,6 @@ class StreamfNIRSData : AppCompatActivity() {
                 streamToggleButton.isEnabled = false
                 streamToggleButton.text = "Start Streaming"
                 isStreaming = false
-
 
             }
         }
@@ -259,11 +259,22 @@ class StreamfNIRSData : AppCompatActivity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+// Make sure these exist at the top of your Activity:
+// private val stimIndexMap = linkedMapOf<String, Int>()
+// private var nextStimIndex = 0
+// private val stimulusColorMap = linkedMapOf<String, Int>() // label -> ARGB color
+
     private fun addStimulusLabel(label: String) {
         val stim = StimulusLabel(label)
         stimulusLabels.add(stim)
 
+        // Stable index per label
         val idx = stimIndexMap.getOrPut(label) { nextStimIndex++ }
+
+        // Store/refresh the palette color for this label (used by plot highlights)
+        val baseColor = baseStimColor(idx)              // from your STIM_COLORS
+        stimulusColorMap[label] = baseColor
+        channelPlotView.setStimulusPalette(stimulusColorMap) // keep plot in sync
 
         val btn = MaterialButton(this).apply {
             text = label
@@ -274,15 +285,17 @@ class StreamfNIRSData : AppCompatActivity() {
                 .setAllCornerSizes(resources.displayMetrics.density * 12f)
                 .build()
 
-            // No stroke when created
+            // No stroke when created (inactive look)
             strokeWidth = 0
             strokeColor = null
 
             stateListAnimator = null
             rippleColor = ColorStateList.valueOf(0x1F000000.toInt())
 
-            backgroundTintList = getInactiveTintColor(idx)
+            backgroundTintList = getInactiveTintColor(idx) // darker variant
             setTextColor(ContextCompat.getColor(this@StreamfNIRSData, R.color.white))
+
+            // stash index for quick toggle
             tag = idx
 
             setOnClickListener { toggleStimulus(stim, this) }
@@ -301,22 +314,37 @@ class StreamfNIRSData : AppCompatActivity() {
 
     private fun toggleStimulus(stimulus: StimulusLabel, button: MaterialButton) {
         stimulus.isActive = !stimulus.isActive
-        val idx = (button.tag as? Int) ?: stimIndexMap[stimulus.label] ?: 0
+
+        val idx = (button.tag as? Int)
+            ?: stimIndexMap[stimulus.label]
+            ?: 0
 
         button.setTextColor(ContextCompat.getColor(this, R.color.white))
 
         if (stimulus.isActive) {
+            // Active: brighten + add black outline
             button.backgroundTintList = getActiveTintColor(idx)
             button.strokeWidth = (resources.displayMetrics.density * 2f).toInt()
             button.strokeColor = ColorStateList.valueOf(Color.BLACK)
         } else {
+            // Inactive: darker, no outline
             button.backgroundTintList = getInactiveTintColor(idx)
             button.strokeWidth = 0
             button.strokeColor = null
         }
 
-        Log.i("StimulusToggle", "Stimulus '${stimulus.label}' → ${if (stimulus.isActive) "START" else "STOP"}")
+        Log.i("StimulusToggle",
+            "Stimulus '${stimulus.label}' → ${if (stimulus.isActive) "START" else "STOP"}")
 
+        // Notify plot to draw/remove highlight bands at the current plot time
+        val nowT = tsBuffer.lastOrNull() ?: 0f
+        channelPlotView.addStimulusEvent(
+            label = stimulus.label,
+            isStart = stimulus.isActive,
+            t = nowT
+        )
+
+        // Broadcast to service as before
         BLEConnectionManager.broadcastStimulusEvent(
             StimulusEvent(label = stimulus.label, isStart = stimulus.isActive)
         )
@@ -487,6 +515,7 @@ class StreamfNIRSData : AppCompatActivity() {
         }
 
         updateBatteryLevelIndicator(BLEConnectionManager.readLatestBatteryLevel())
+
     }
 
     fun updateBatteryLevelIndicator(batteryPercentage: Int){
@@ -551,7 +580,6 @@ class StreamfNIRSData : AppCompatActivity() {
                 signalQualityIndicator?.setColorFilter(accentColor)
             }
         }
-
 
     }
 
@@ -761,6 +789,9 @@ class StreamfNIRSData : AppCompatActivity() {
                     Log.i("StreamfNIRSData", "✅ Ready to stream data from $alias")
                     isConnected = true
                     connectButton.text = "Disconnect"
+
+                    BLEConnectionManager.getDeviceBatteryLevel()
+                    batteryLevelIndicator?.setColorFilter(R.color.white)
 
                     // Update the
                     layoutInit(0)
