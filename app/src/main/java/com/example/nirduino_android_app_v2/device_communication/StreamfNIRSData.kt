@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -90,6 +91,19 @@ class StreamfNIRSData : AppCompatActivity() {
         75, 64, 75, 64
     ) // low power
 
+    // Dark, white-text-friendly, and distinct from your red/black plot lines
+    private val STIM_COLORS = intArrayOf(
+        Color.parseColor("#0066A8"), // deep blue
+        Color.parseColor("#007A6C"), // deep teal-green
+        Color.parseColor("#B46900"), // dark orange (far from red)
+        Color.parseColor("#2E2B8E"), // indigo
+        Color.parseColor("#4F79A7"), // blue-gray (dark)
+        Color.parseColor("#8A2F7A")  // dark magenta/purple
+    )
+
+    // Expose as a list to send to ChannelPlotView later
+    val STIM_COLOR_LIST: List<Int> get() = STIM_COLORS.toList()
+
     private lateinit var stimulusBar: LinearLayout
     private lateinit var addStimulusButton: Button
     private val stimulusLabels = mutableListOf<StimulusLabel>()
@@ -120,6 +134,10 @@ class StreamfNIRSData : AppCompatActivity() {
     private val irBuffer  = ArrayDeque<Float>()
     private var lastPlottedTs = -1f
     private val windowSeconds = 10f   // moving window length
+
+    // Stable mapping: label -> palette index
+    private val stimIndexMap = linkedMapOf<String, Int>()
+    private var nextStimIndex = 0
 
     // When the user switches channels, we already clear buffers in onItemSelected;
     // keep that behavior.
@@ -245,28 +263,31 @@ class StreamfNIRSData : AppCompatActivity() {
         val stim = StimulusLabel(label)
         stimulusLabels.add(stim)
 
+        val idx = stimIndexMap.getOrPut(label) { nextStimIndex++ }
+
         val btn = MaterialButton(this).apply {
             text = label
             textSize = 14f
             isAllCaps = true
 
-            // lock shape/feel
             shapeAppearanceModel = shapeAppearanceModel.toBuilder()
-                .setAllCornerSizes(resources.displayMetrics.density * 12f) // 12dp radius
+                .setAllCornerSizes(resources.displayMetrics.density * 12f)
                 .build()
-            strokeWidth = (resources.displayMetrics.density * 1f).toInt()
-            strokeColor = android.content.res.ColorStateList.valueOf(0xFFBDBDBD.toInt())
-            stateListAnimator = null                   // no press “bounce”
-            rippleColor = android.content.res.ColorStateList.valueOf(0x1F000000.toInt())
 
-            // default = inactive look
-            backgroundTintList = inactiveTint
+            // No stroke when created
+            strokeWidth = 0
+            strokeColor = null
 
-            // click toggles + logs + broadcast
+            stateListAnimator = null
+            rippleColor = ColorStateList.valueOf(0x1F000000.toInt())
+
+            backgroundTintList = getInactiveTintColor(idx)
+            setTextColor(ContextCompat.getColor(this@StreamfNIRSData, R.color.white))
+            tag = idx
+
             setOnClickListener { toggleStimulus(stim, this) }
         }
 
-        // spacing between chips
         val lp = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -275,28 +296,64 @@ class StreamfNIRSData : AppCompatActivity() {
             bottomMargin = dp(8)
         }
 
-        btn.setTextColor(ContextCompat.getColor(this, R.color.white))
         stimulusBar.addView(btn, stimulusBar.childCount - 1, lp)
     }
 
     private fun toggleStimulus(stimulus: StimulusLabel, button: MaterialButton) {
         stimulus.isActive = !stimulus.isActive
+        val idx = (button.tag as? Int) ?: stimIndexMap[stimulus.label] ?: 0
 
         button.setTextColor(ContextCompat.getColor(this, R.color.white))
 
-        // color swap only; shape/text don’t change
-        button.backgroundTintList = if (stimulus.isActive) activeTint else inactiveTint
+        if (stimulus.isActive) {
+            button.backgroundTintList = getActiveTintColor(idx)
+            button.strokeWidth = (resources.displayMetrics.density * 2f).toInt()
+            button.strokeColor = ColorStateList.valueOf(Color.BLACK)
+        } else {
+            button.backgroundTintList = getInactiveTintColor(idx)
+            button.strokeWidth = 0
+            button.strokeColor = null
+        }
 
-        // 🧠 sanity log
-        Log.i(
-            "StimulusToggle",
-            "Stimulus '${stimulus.label}' → ${if (stimulus.isActive) "START" else "STOP"}"
-        )
+        Log.i("StimulusToggle", "Stimulus '${stimulus.label}' → ${if (stimulus.isActive) "START" else "STOP"}")
 
-        // service receives this and should persist it
         BLEConnectionManager.broadcastStimulusEvent(
             StimulusEvent(label = stimulus.label, isStart = stimulus.isActive)
         )
+    }
+
+    // --- Helpers ---
+    private fun baseStimColor(index: Int): Int {
+        val n = STIM_COLORS.size
+        val safe = ((index % n) + n) % n
+        return STIM_COLORS[safe]
+    }
+
+    /** Darken/desaturate via HSV to create clear inactive states */
+    private fun adjustColor(
+        color: Int,
+        brightnessFactor: Float = 1f,   // <1 = darker
+        saturationFactor: Float = 1f,   // <1 = less saturated
+        alpha: Int? = null
+    ): Int {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+        hsv[1] = (hsv[1] * saturationFactor).coerceIn(0f, 1f)
+        hsv[2] = (hsv[2] * brightnessFactor).coerceIn(0f, 1f)
+        return Color.HSVToColor(alpha ?: Color.alpha(color), hsv)
+    }
+
+    /** Active = base color (good contrast with white text) */
+    fun getActiveTintColor(stimIndex: Int): ColorStateList {
+        val base = baseStimColor(stimIndex)
+        val brighter = adjustColor(base, brightnessFactor = 1.15f) // brighten 15%
+        return ColorStateList.valueOf(brighter)
+    }
+
+    fun getInactiveTintColor(stimIndex: Int): ColorStateList {
+        val base = baseStimColor(stimIndex)
+        val darker = adjustColor(base, brightnessFactor = 0.60f, saturationFactor = 0.90f)
+        return ColorStateList.valueOf(darker)
     }
 
     private val activeTint by lazy {
