@@ -13,6 +13,7 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
@@ -65,6 +66,9 @@ class StreamfNIRSData : AppCompatActivity() {
 
     private var pollIntervalMs: Long = 200  // Adjustable polling interval in milliseconds
     private var sqiPollingJob: Job? = null
+
+    private var signalQualityIndicator: ImageView? = null
+    private var batteryLevelIndicator: ImageView? = null
 
     data class StimulusLabel(
         val label: String,
@@ -137,6 +141,9 @@ class StreamfNIRSData : AppCompatActivity() {
 
         channelSpinner = findViewById(R.id.spinner_channels)
         channelPlotView = findViewById(R.id.channel_plot_view)
+
+        signalQualityIndicator = findViewById(R.id.image_signal)
+        batteryLevelIndicator = findViewById(R.id.image_battery)
 
         onScreenTimer = findViewById(R.id.text_timer)
 
@@ -364,6 +371,11 @@ class StreamfNIRSData : AppCompatActivity() {
                 delay(pollIntervalMs)
 
                 try{
+                    Log.w("pollingRSSI", "REQUESTED")
+                    BLEConnectionManager.requestConnectionSignalLevel()
+                }catch (e: Exception){}
+
+                try{
                     // Get the latest fNIRS data and update on-screen visuals
                     fNIRSData = BLEConnectionManager.getLatestfNIRSData()
                     var latestTimestamp = fNIRSData[fNIRSData.size-1].timestamps.last().toDouble()
@@ -399,6 +411,8 @@ class StreamfNIRSData : AppCompatActivity() {
                         irSeries   = irBuffer.toList()
                     )
 
+                    updateConnectionQualityIndicator(BLEConnectionManager.readLatestSignalLevel())
+
                     // Log channel-specific voltage data
                     Log.e("todo", "Channel " + selectedChannelID +
                             " , Red = " + redDataPoint.toString() +
@@ -415,6 +429,35 @@ class StreamfNIRSData : AppCompatActivity() {
 
             }
         }
+    }
+
+    fun updateConnectionQualityIndicator(rssiLevel: Int){
+
+        Log.d("pollingRSSI", rssiLevel.toString())
+
+        val accentColor = ContextCompat.getColor(this, R.color.colorAccentValue) // your accent
+        val primaryColor = ContextCompat.getColor(this, R.color.colorPrimaryValue) // your primary
+
+        when {
+            rssiLevel >= -50 -> { // excellent signal
+                signalQualityIndicator?.setImageResource(R.drawable.signal_maximum)
+                signalQualityIndicator?.setColorFilter(primaryColor)
+            }
+            rssiLevel >= -60 -> { // good
+                signalQualityIndicator?.setImageResource(R.drawable.signal_level3)
+                signalQualityIndicator?.setColorFilter(primaryColor)
+            }
+            rssiLevel >= -70 -> { // fair
+                signalQualityIndicator?.setImageResource(R.drawable.signal_level2)
+                signalQualityIndicator?.setColorFilter(accentColor)
+            }
+            else -> { // poor
+                signalQualityIndicator?.setImageResource(R.drawable.signal_low)
+                signalQualityIndicator?.setColorFilter(accentColor)
+            }
+        }
+
+
     }
 
     private fun stopPollingServiceData() {

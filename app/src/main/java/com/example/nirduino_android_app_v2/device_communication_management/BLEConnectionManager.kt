@@ -376,6 +376,21 @@ class BLEConnectionManager : Service() {
             }
         }
 
+        @SuppressLint("MissingPermission")
+        fun requestConnectionSignalLevel(){
+            connectionManagerInstance?.activeConnections?.values?.forEach {
+                it.requestCurrentRSSI()
+            }
+        }
+
+        fun readLatestSignalLevel(): Int {
+            var currRSSI = 0
+            connectionManagerInstance?.activeConnections?.values?.forEach {
+                currRSSI =  it.connectionRSSI
+            }
+            return currRSSI
+        }
+
     }
 
 

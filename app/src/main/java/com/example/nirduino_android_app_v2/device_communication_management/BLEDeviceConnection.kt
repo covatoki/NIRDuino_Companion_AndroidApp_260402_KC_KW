@@ -39,7 +39,7 @@ class BleDeviceConnection(
     var ledIntensityValues = IntArray(33) { 8 }
 
     val dataProcessor = DataParsingAndProcessing()
-
+    var connectionRSSI = 0
     companion object {
         val FNIRS_SERVICE_UUID: UUID = UUID.fromString("938548e6-c655-11ea-87d0-0242ac130003")
         val LED_CHARACTERISTIC_UUID: UUID = UUID.fromString("19B10001-E8F2-537E-4F6C-D104768A1213")
@@ -165,6 +165,11 @@ class BleDeviceConnection(
         dataProcessor.timestampSeconds = 0.0f
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun requestCurrentRSSI(){
+        Log.d("BleDeviceConnectionRSSI", "REQUESTED")
+        bluetoothGatt?.readRemoteRssi()
+    }
 
     private val gattCallback = object : BluetoothGattCallback() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -277,5 +282,12 @@ class BleDeviceConnection(
                 gatt.discoverServices()
             }
         }
+
+        override fun onReadRemoteRssi(gatt: BluetoothGatt, rssi: Int, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                connectionRSSI = rssi
+            }
+        }
+
     }
 }
