@@ -2,46 +2,165 @@ package com.example.nirduino_android_app_v2.device_communication
 
 import android.content.Context
 import android.graphics.*
+import android.graphics.drawable.ColorDrawable
 import android.util.AttributeSet
 import android.view.View
+import kotlin.math.max
+import kotlin.math.min
 
 class ChannelPlotView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    private val linePaint = Paint().apply {
-        color = Color.BLUE
-        strokeWidth = 4f
-        style = Paint.Style.STROKE
-        isAntiAlias = true
+    // === Styling (kept light/clean) ===
+    private val redPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.RED; strokeWidth = 3f; style = Paint.Style.STROKE
+    }
+    private val irPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK; strokeWidth = 3f; style = Paint.Style.STROKE
+        pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
+    }
+    private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.GRAY; strokeWidth = 1.5f; style = Paint.Style.STROKE
+    }
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.DKGRAY; textSize = 22f
+    }
+    private val axisTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.DKGRAY; textSize = 20f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    private val legendTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.DKGRAY; textSize = 20f
+    }
+    private val legendBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = (background as? ColorDrawable)?.color ?: Color.WHITE
+        alpha = 230
     }
 
-    private var plotData: List<Float> = emptyList()
+    // === Data ===
+    private var ts: List<Float> = emptyList()
+    private var red: List<Float> = emptyList()
+    private var ir: List<Float> = emptyList()
 
-    fun updateData(newData: List<Float>) {
-        plotData = newData
+    // Configure the rolling window (seconds)
+    var windowSeconds: Float = 30f
+
+    fun updateData(timestamps: List<Float>, redSeries: List<Float>, irSeries: List<Float>) {
+        // 1) Guard
+        if (timestamps.isEmpty() || redSeries.size != timestamps.size || irSeries.size != timestamps.size) return
+
+        // 2) If timestamps jump backwards → new round → keep only latest increasing suffix
+        var start = 0
+        for (i in 1 until timestamps.size) {
+            if (timestamps[i] < timestamps[i - 1]) start = i
+        }
+
+        var t = timestamps.subList(start, timestamps.size)
+        var r = redSeries.subList(start, redSeries.size)
+        var iR = irSeries.subList(start, irSeries.size)
+
+        // 3) Moving window: keep only last `windowSeconds`
+        val tLast = t.last()
+        val cutoff = tLast - windowSeconds
+        val firstIdx = t.indexOfFirst { it >= cutoff }.let { if (it == -1) 0 else it }
+
+        ts = t.subList(firstIdx, t.size)
+        red = r.subList(firstIdx, r.size)
+        ir  = iR.subList(firstIdx, iR.size)
+
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        if (ts.size < 2) return
 
-        if (plotData.size < 2) return
+        val paddingLeft = 100f
+        val paddingRight = 60f
+        val paddingTop = 60f
+        val paddingBottom = 70f
 
-        val maxVal = plotData.maxOrNull() ?: 1f
-        val minVal = plotData.minOrNull() ?: 0f
-        val plotHeight = height.toFloat()
-        val plotWidth = width.toFloat()
-        val step = plotWidth / (plotData.size - 1)
+        val plotWidth = width - paddingLeft - paddingRight
+        val plotHeight = height - paddingTop - paddingBottom
 
-        val path = Path()
-        for (i in plotData.indices) {
-            val x = i * step
-            val normalizedY = (plotData[i] - minVal) / (maxVal - minVal + 1e-6f)
-            val y = plotHeight * (1f - normalizedY)
+        val tMin = ts.first()
+        val tMax = ts.last()
+        val eps = 1e-6f
+        val yMin = min(red.minOrNull() ?: 0f, ir.minOrNull() ?: 0f)
+        val yMax = max(red.maxOrNull() ?: 1f, ir.maxOrNull() ?: 1f)
 
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        fun xAt(t: Float) = paddingLeft + ((t - tMin) / (tMax - tMin + eps)) * plotWidth
+        fun yAt(v: Float) = paddingTop + plotHeight * (1f - ((v - yMin) / (yMax - yMin + eps)))
+
+        // ---- Ticks & labels only (no full axes) ----
+        val yTicks = 5
+        for (k in 0..yTicks) {
+            val yVal = yMin + k * (yMax - yMin) / yTicks
+            val yPix = yAt(yVal)
+            canvas.drawLine(paddingLeft - 10, yPix, paddingLeft, yPix, tickPaint)
+            canvas.drawText(String.format("%.2f", yVal), 20f, yPix + 6f, labelPaint)
         }
-        canvas.drawPath(path, linePaint)
+
+        val xTicks = 5
+        val xBase = height - paddingBottom
+        for (k in 0..xTicks) {
+            val tVal = tMin + k * (tMax - tMin) / xTicks
+            val xPix = xAt(tVal)
+            canvas.drawLine(xPix, xBase, xPix, xBase + 10, tickPaint)
+            canvas.drawText(String.format("%.1f", tVal), xPix - 18f, xBase + 28f, labelPaint)
+        }
+
+        // ---- Small “text boxes” for axis titles ----
+        drawTextBox(canvas, "Raw Voltage (V)", 2f, paddingTop - 30f, axisTitlePaint, legendBgPaint, Paint.Align.LEFT)
+        drawTextBox(canvas, "Time (s)", width - paddingRight/2, xBase + 60f, axisTitlePaint, legendBgPaint, Paint.Align.RIGHT)
+
+        // ---- Legend (stacked) ----
+        val legendX = width - paddingRight - 140f
+        val legendTop = paddingTop + 6f
+        drawLegendEntry(canvas, legendX, legendTop, "Red", redPaint)
+        drawLegendEntry(canvas, legendX, legendTop + 28f, "IR", irPaint)
+
+        // ---- Series paths ----
+        fun buildPath(series: List<Float>): Path {
+            val p = Path()
+            for (idx in series.indices) {
+                val x = xAt(ts[idx])
+                val y = yAt(series[idx])
+                if (idx == 0) p.moveTo(x, y) else p.lineTo(x, y)
+            }
+            return p
+        }
+
+        canvas.drawPath(buildPath(red), redPaint)
+        canvas.drawPath(buildPath(ir), irPaint)
+    }
+
+    private fun drawTextBox(
+        canvas: Canvas, text: String, x: Float, y: Float,
+        paint: Paint, bgPaint: Paint, align: Paint.Align
+    ) {
+        val oldAlign = paint.textAlign
+        paint.textAlign = align
+
+        val padH = 8f; val padV = 4f
+        val fm = paint.fontMetrics
+        val textH = fm.bottom - fm.top
+        val textW = paint.measureText(text)
+
+        val rect = when (align) {
+            Paint.Align.LEFT   -> RectF(x - padH, y + fm.top - padV, x + textW + padH, y + fm.bottom + padV)
+            Paint.Align.CENTER -> RectF(x - textW/2 - padH, y + fm.top - padV, x + textW/2 + padH, y + fm.bottom + padV)
+            Paint.Align.RIGHT  -> RectF(x - textW - padH, y + fm.top - padV, x + padH, y + fm.bottom + padV)
+        }
+
+        canvas.drawRoundRect(rect, 10f, 10f, bgPaint)
+        canvas.drawText(text, x, y, paint)
+        paint.textAlign = oldAlign
+    }
+
+    private fun drawLegendEntry(canvas: Canvas, x: Float, baselineY: Float, label: String, linePaint: Paint) {
+        val lineLen = 36f
+        canvas.drawLine(x, baselineY, x + lineLen, baselineY, linePaint)
+        drawTextBox(canvas, label, x + lineLen + 8f, baselineY + 2f, legendTextPaint, legendBgPaint, Paint.Align.LEFT)
     }
 }

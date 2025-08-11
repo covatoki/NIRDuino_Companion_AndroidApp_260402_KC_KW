@@ -56,6 +56,8 @@ class BleDeviceConnection(
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun streamNIRDuinoData(ledIntensityValues: IntArray) {
 
+        resetTimeStamps()
+
         this.ledIntensityValues = ledIntensityValues
 
         val service = bluetoothGatt?.getService(FNIRS_SERVICE_UUID)
@@ -72,8 +74,6 @@ class BleDeviceConnection(
             characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             bluetoothGatt?.writeCharacteristic(characteristic) ?: false
         }
-
-        dataProcessor.resetTimeStamps()
 
         Log.d("BleDeviceConnection", "Sent START stream command to $alias, success: $success")
         dataProcessor.startNewDataRound(this.ledIntensityValues)
@@ -160,6 +160,11 @@ class BleDeviceConnection(
     fun getChannelDisplayData(): List<DisplayChannelData> {
         return dataProcessor.channelDisplayData
     }
+
+    fun resetTimeStamps(){
+        dataProcessor.timestampSeconds = 0.0f
+    }
+
 
     private val gattCallback = object : BluetoothGattCallback() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -272,6 +277,5 @@ class BleDeviceConnection(
                 gatt.discoverServices()
             }
         }
-
     }
 }

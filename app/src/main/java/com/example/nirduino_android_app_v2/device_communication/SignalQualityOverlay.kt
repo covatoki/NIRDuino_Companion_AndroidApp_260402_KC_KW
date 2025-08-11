@@ -63,7 +63,7 @@ class SignalQualityOverlay @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        Log.d("SQI_OVERLAY_ONDRAW", sqiList.toString())
+//        Log.d("SQI_OVERLAY_ONDRAW", sqiList.toString())
 
         canvas.drawColor(Color.WHITE)
 

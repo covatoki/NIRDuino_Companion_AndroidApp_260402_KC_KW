@@ -72,6 +72,7 @@ class BLEConnectionManager : Service() {
     fun getChannelDisplayData(): List<DisplayChannelData>{
         var currentChannelDisplayData : List<DisplayChannelData> = emptyList()
         activeConnections.values.forEach(){
+            it.dataProcessor.extractfNIRSChannelDataUsingLayout()
             currentChannelDisplayData = it.getChannelDisplayData()
         }
         return currentChannelDisplayData
@@ -367,6 +368,12 @@ class BLEConnectionManager : Service() {
 
         fun getLatestfNIRSData():List<DataRound>{
             return connectionManagerInstance?.getLatestfNIRSdata() ?: emptyList()
+        }
+
+        fun hardResetTimer() {
+            connectionManagerInstance?.activeConnections?.values?.forEach {
+                it.resetTimeStamps()
+            }
         }
 
     }

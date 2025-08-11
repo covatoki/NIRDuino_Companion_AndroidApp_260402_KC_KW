@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlinx.coroutines.isActive
+import com.google.android.material.button.MaterialButton
 
 class StreamfNIRSData : AppCompatActivity() {
 
@@ -46,6 +48,8 @@ class StreamfNIRSData : AppCompatActivity() {
     private lateinit var layoutSpinner: Spinner
     private lateinit var statusTextView: TextView
     private lateinit var connectButton: Button
+
+    private lateinit var onScreenTimer : TextView
 
     private lateinit var knownDeviceStore: KnownDeviceDataStore
     private lateinit var layoutDataStore: LayoutDataStore
@@ -59,7 +63,7 @@ class StreamfNIRSData : AppCompatActivity() {
 
     private lateinit var sqiOverlay: SignalQualityOverlay
 
-    private var pollIntervalMs: Long = 300  // Adjustable polling interval in milliseconds
+    private var pollIntervalMs: Long = 200  // Adjustable polling interval in milliseconds
     private var sqiPollingJob: Job? = null
 
     data class StimulusLabel(
@@ -103,6 +107,19 @@ class StreamfNIRSData : AppCompatActivity() {
     var layoutMap: Map<String, LayoutStudioItem> = emptyMap()
     var layoutNames: List<String> = emptyList()
 
+    // rolling buffers for the selected channel
+    private val maxPoints = 600  // ~60s if ~10 Hz; adjust to taste
+    private var currentChannelSpinnerIndex = 0
+    // Rolling plot buffers + window control
+    private val tsBuffer = ArrayDeque<Float>()
+    private val redBuffer = ArrayDeque<Float>()
+    private val irBuffer  = ArrayDeque<Float>()
+    private var lastPlottedTs = -1f
+    private val windowSeconds = 10f   // moving window length
+
+    // When the user switches channels, we already clear buffers in onItemSelected;
+    // keep that behavior.
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_stream_fnirs_data)
@@ -120,6 +137,8 @@ class StreamfNIRSData : AppCompatActivity() {
 
         channelSpinner = findViewById(R.id.spinner_channels)
         channelPlotView = findViewById(R.id.channel_plot_view)
+
+        onScreenTimer = findViewById(R.id.text_timer)
 
         lifecycleScope.launch {
 
@@ -162,7 +181,6 @@ class StreamfNIRSData : AppCompatActivity() {
 
                 // Stop connect data for updating visuals on-screen
                 stopPollingServiceData()
-                clearSignalQualityViews()
 
                 // Updated data streaming button
                 streamToggleButton.isEnabled = false
@@ -214,35 +232,113 @@ class StreamfNIRSData : AppCompatActivity() {
             .show()
     }
 
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
     private fun addStimulusLabel(label: String) {
         val stim = StimulusLabel(label)
         stimulusLabels.add(stim)
 
-        val button = Button(this).apply {
+        val btn = MaterialButton(this).apply {
             text = label
             textSize = 14f
+            isAllCaps = true
+
+            // lock shape/feel
+            shapeAppearanceModel = shapeAppearanceModel.toBuilder()
+                .setAllCornerSizes(resources.displayMetrics.density * 12f) // 12dp radius
+                .build()
+            strokeWidth = (resources.displayMetrics.density * 1f).toInt()
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFFBDBDBD.toInt())
+            stateListAnimator = null                   // no press “bounce”
+            rippleColor = android.content.res.ColorStateList.valueOf(0x1F000000.toInt())
+
+            // default = inactive look
+            backgroundTintList = inactiveTint
+
+            // click toggles + logs + broadcast
             setOnClickListener { toggleStimulus(stim, this) }
         }
 
-        stimulusBar.addView(button, stimulusBar.childCount - 1) // Insert before "+ Add" button
+        // spacing between chips
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            marginEnd = dp(8)
+            bottomMargin = dp(8)
+        }
+
+        btn.setTextColor(ContextCompat.getColor(this, R.color.white))
+        stimulusBar.addView(btn, stimulusBar.childCount - 1, lp)
     }
 
-    private fun toggleStimulus(stimulus: StimulusLabel, button: Button) {
+    private fun toggleStimulus(stimulus: StimulusLabel, button: MaterialButton) {
         stimulus.isActive = !stimulus.isActive
 
-        // Update button color
-        val colorRes = if (stimulus.isActive) R.color.teal_200 else R.color.gray
-        button.setBackgroundColor(ContextCompat.getColor(this, colorRes))
+        button.setTextColor(ContextCompat.getColor(this, R.color.white))
 
-        // Create and send the stimulus event (timestamp handled in the service)
-        val event = StimulusEvent(
-            label = stimulus.label,
-            isStart = stimulus.isActive
+        // color swap only; shape/text don’t change
+        button.backgroundTintList = if (stimulus.isActive) activeTint else inactiveTint
+
+        // 🧠 sanity log
+        Log.i(
+            "StimulusToggle",
+            "Stimulus '${stimulus.label}' → ${if (stimulus.isActive) "START" else "STOP"}"
         )
 
-        BLEConnectionManager.broadcastStimulusEvent(event)
-
+        // service receives this and should persist it
+        BLEConnectionManager.broadcastStimulusEvent(
+            StimulusEvent(label = stimulus.label, isStart = stimulus.isActive)
+        )
     }
+
+    private val activeTint by lazy {
+        ColorStateList.valueOf(ContextCompat.getColor(this, R.color.colorAccentValue))
+    }
+    private val inactiveTint by lazy {
+        ColorStateList.valueOf(ContextCompat.getColor(this, R.color.colorPrimaryValue))
+    }
+
+    /** Apply fixed shape/padding, fixed text color, margins, and inactive tint */
+    private fun styleStimulusButton(button: Button) {
+        // lock shape/padding so size never changes
+        button.background = ContextCompat.getDrawable(this, R.drawable.stimulus_button_bg)
+        // fixed text color
+        button.setTextColor(0xFF212121.toInt())
+        // avoid implicit min width on Buttons
+        button.minWidth = 0
+        button.minimumWidth = 0
+        // default tint = inactive
+        button.backgroundTintList = inactiveTint
+
+        // enforce margins
+        val lp = (button.layoutParams as? LinearLayout.LayoutParams)
+            ?: LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        lp.marginEnd = dp(8)
+        lp.bottomMargin = dp(8)
+        button.layoutParams = lp
+    }
+
+    /** Normalize all existing stimulus buttons (except the +Add) */
+    private fun normalizeExistingStimulusButtons() {
+        for (i in 0 until stimulusBar.childCount) {
+            val v = stimulusBar.getChildAt(i)
+            if (v is Button && v.id != R.id.btn_add_stimulus) {
+                styleStimulusButton(v)
+
+                // Keep the correct tint based on current model state
+                val label = v.text?.toString()
+                val stim = stimulusLabels.find { it.label == label }
+                v.backgroundTintList = if (stim?.isActive == true) activeTint else inactiveTint
+            }
+        }
+    }
+
+
+
 
     private fun startPollingServiceData() {
         sqiPollingJob?.cancel()  // kill old job
@@ -260,22 +356,65 @@ class StreamfNIRSData : AppCompatActivity() {
                 // Get the latest SQI data and update on-screen visuals
                 val newSQI = BLEConnectionManager.getLatestSQIValues()
                 if (!newSQI.isNullOrEmpty()) {
+                    Log.w("SQI_POLL", "SQI view updated")
                     updateSignalQualityViews(newSQI)
                 } else {
                     Log.w("SQI_POLL", "SQI list is empty or null")
                 }
                 delay(pollIntervalMs)
 
-                // Get the latest fNIRS data and update on-screen visuals
-                fNIRSData = BLEConnectionManager.getLatestfNIRSData()
-                Log.d("POLLING_DATA", fNIRSData.toString())
+                try{
+                    // Get the latest fNIRS data and update on-screen visuals
+                    fNIRSData = BLEConnectionManager.getLatestfNIRSData()
+                    var latestTimestamp = fNIRSData[fNIRSData.size-1].timestamps.last().toDouble()
+                    var latestTimeStampString = String.format("%.2f", latestTimestamp) + " s"
+                    onScreenTimer.setText(latestTimeStampString)
+
+                    // Isolate channel-specific voltage data
+                    val selectedChannel = channelCoords[currentChannelSpinnerIndex]
+                    val selectedChannelID = selectedChannel.channelNumber
+
+                    // NOTE: you had a typo; IR was read from redData before.
+                    // Grab the last vectors correctly:
+                    val latestRedVector = fNIRSData.last().redData.last()
+                    val latestIrVector  = fNIRSData.last().irData.last()
+
+                    val redDataPoint = latestRedVector[selectedChannelID]
+                    val infraredDataPoint = latestIrVector[selectedChannelID]
+
+                    // Append to rolling buffers (timestamps in seconds)
+                    tsBuffer.add(latestTimestamp.toFloat())
+                    redBuffer.add(redDataPoint.toFloat())
+                    irBuffer.add(infraredDataPoint.toFloat())
+
+                    // Enforce rolling window
+                    while (tsBuffer.size > maxPoints) { tsBuffer.removeFirst() }
+                    while (redBuffer.size > maxPoints) { redBuffer.removeFirst() }
+                    while (irBuffer.size  > maxPoints) { irBuffer.removeFirst() }
+
+                    // Push to the plot
+                    channelPlotView.updateData(
+                        timestamps = tsBuffer.toList(),
+                        redSeries  = redBuffer.toList(),
+                        irSeries   = irBuffer.toList()
+                    )
+
+                    // Log channel-specific voltage data
+                    Log.e("todo", "Channel " + selectedChannelID +
+                            " , Red = " + redDataPoint.toString() +
+                            " , Infrared = " + infraredDataPoint.toString())
+
+
+                }
+                catch (e: Exception){
+
+                    Log.e("StreamfNIRSData", e.toString())
+
+                }
+
 
             }
         }
-    }
-
-    private fun clearSignalQualityViews() {
-        sqiOverlay.updateSQI(emptyList())  // Clear SQI and redraw
     }
 
     private fun stopPollingServiceData() {
@@ -285,6 +424,7 @@ class StreamfNIRSData : AppCompatActivity() {
 
     private fun updateSignalQualityViews(sqiList: List<Float>) {
         sqiOverlay.updateSQI(sqiList)
+        sqiOverlay.invalidate()
     }
 
     private suspend fun setupAliasSpinner() {
@@ -345,6 +485,10 @@ class StreamfNIRSData : AppCompatActivity() {
             detectorList = detectors,
             channelList = channelCoords
         )
+
+        Log.d("LayoutSpinnerSETUP", sources.toString())
+        Log.d("LayoutSpinnerSETUP", detectors.toString())
+        Log.d("LayoutSpinnerSETUP", channelCoords.toString())
 
         layoutSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -411,13 +555,19 @@ class StreamfNIRSData : AppCompatActivity() {
         channelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
 
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-
                 Log.d("ChannelSpinner", "Spinner selection updated")
+                currentChannelSpinnerIndex = position
 
-                val currChannel = channelCoords.get(position)
+                // reset rolling data when switching channels
+                tsBuffer.clear()
+                redBuffer.clear()
+                irBuffer.clear()
 
-                Log.d("ChannelSpinner",  (currChannel.channelNumber+1).toString() + " , " + currChannel.type.toString() + " Source: " + sources.get(position).id.toString() + " , Detector " + detectors.get(position).id.toString())
-
+                val currChannel = channelCoords[position]
+                Log.d(
+                    "ChannelSpinner",
+                    "${currChannel.channelNumber+1} , ${currChannel.type} Source: ${currChannel.sourceId} , Detector ${currChannel.detectorId}"
+                )
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -439,6 +589,17 @@ class StreamfNIRSData : AppCompatActivity() {
             val gson = Gson()
             val layoutJson = gson.toJson(overlays)
             BLEConnectionManager.startService(this@StreamfNIRSData, alias, layoutJson)
+
+            // Update layout data and ensure calculations are performed
+
+
+            // Prevent user from changing the device in use
+            aliasSpinner.isEnabled = false;
+            aliasSpinner.alpha = 0.75f
+
+            // Prevent user from changing the layout in use
+            layoutSpinner.isEnabled = false;
+            layoutSpinner.alpha = 0.75f
 
         }
 
@@ -471,7 +632,6 @@ class StreamfNIRSData : AppCompatActivity() {
                     statusTextView.setCompoundDrawables(null, null, null, null)
                     statusTextView.text = "Connecting to $alias... ($it)"
                     stopPollingServiceData()
-                    clearSignalQualityViews()
 
                 }
                 delay(500)
@@ -484,7 +644,6 @@ class StreamfNIRSData : AppCompatActivity() {
 
             // Update on-screen data
             stopPollingServiceData()
-            clearSignalQualityViews()
 
         }
 
@@ -508,6 +667,8 @@ class StreamfNIRSData : AppCompatActivity() {
         super.onDestroy()
 
         stopPollingServiceData()
+
+        BLEConnectionManager.hardResetTimer()
 
         if (isConnected) {
             BLEConnectionManager.stopService(this)
