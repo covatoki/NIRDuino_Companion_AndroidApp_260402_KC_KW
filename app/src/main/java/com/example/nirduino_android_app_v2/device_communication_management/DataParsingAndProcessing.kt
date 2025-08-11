@@ -50,6 +50,8 @@ class DataParsingAndProcessing {
     private val bufferedRedSamples = mutableListOf<List<Float>>()
     private val bufferedIrSamples = mutableListOf<List<Float>>()
 
+    var batteryLevel = 0
+
     private val currentRound: DataRound?
         get() = roundWiseData.lastOrNull()
 
@@ -81,7 +83,10 @@ class DataParsingAndProcessing {
     }
 
     fun convertByteToChannelData(wrap: ByteBuffer): Boolean {
+
         wrap.order(ByteOrder.LITTLE_ENDIAN)
+
+        Log.d("RECEIVED_BLE", wrap.capacity().toString())
 
         when (wrap.capacity()) {
             289 -> {
@@ -130,6 +135,10 @@ class DataParsingAndProcessing {
                     // Get the SQI scores for the relevant channels
                     updateSQIScores(5.0f, false)
                 }
+            }
+            4 ->{
+                Log.e("BATTERY_CONNECT",  "Battery level information: " + (wrap.getInt(0)).toString())
+                batteryLevel = wrap.getInt(0)
             }
             else -> return false
         }

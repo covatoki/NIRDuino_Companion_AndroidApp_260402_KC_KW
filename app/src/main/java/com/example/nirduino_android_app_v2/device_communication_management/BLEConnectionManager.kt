@@ -391,6 +391,14 @@ class BLEConnectionManager : Service() {
             return currRSSI
         }
 
+        fun readLatestBatteryLevel(): Int {
+            var currBatteryLevel = 0
+            connectionManagerInstance?.activeConnections?.values?.forEach {
+                currBatteryLevel = it.deviceBatteryLevel
+            }
+            return currBatteryLevel
+        }
+
     }
 
 

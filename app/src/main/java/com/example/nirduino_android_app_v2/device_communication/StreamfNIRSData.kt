@@ -418,7 +418,6 @@ class StreamfNIRSData : AppCompatActivity() {
                             " , Red = " + redDataPoint.toString() +
                             " , Infrared = " + infraredDataPoint.toString())
 
-
                 }
                 catch (e: Exception){
 
@@ -429,6 +428,45 @@ class StreamfNIRSData : AppCompatActivity() {
 
             }
         }
+
+        updateBatteryLevelIndicator(BLEConnectionManager.readLatestBatteryLevel())
+    }
+
+    fun updateBatteryLevelIndicator(batteryPercentage: Int){
+
+        Log.d("pollingBattery", batteryPercentage.toString())
+
+        val accentColor = ContextCompat.getColor(this, R.color.colorAccentValue) // your accent
+        val amberColor = ContextCompat.getColor(this, R.color.amber_500) // your accent
+        val primaryColor = ContextCompat.getColor(this, R.color.colorPrimaryValue) // your primary
+
+        when{
+            batteryPercentage >= 100 -> {
+                batteryLevelIndicator?.setImageResource(R.drawable.battery_full)
+                batteryLevelIndicator?.setColorFilter(primaryColor)}
+            batteryPercentage >= 85 -> {
+                batteryLevelIndicator?.setImageResource(R.drawable.battery_level6)
+                batteryLevelIndicator?.setColorFilter(primaryColor)}
+            batteryPercentage >= 62.5 -> {
+                batteryLevelIndicator?.setImageResource(R.drawable.battery_level5)
+                batteryLevelIndicator?.setColorFilter(primaryColor)}
+            batteryPercentage >= 50 -> {
+                batteryLevelIndicator?.setImageResource(R.drawable.battery_level4)
+                batteryLevelIndicator?.setColorFilter(amberColor)}
+            batteryPercentage >= 37.5 -> {
+                batteryLevelIndicator?.setImageResource(R.drawable.battery_level3)
+                batteryLevelIndicator?.setColorFilter(amberColor)}
+            batteryPercentage >= 25 -> {
+                batteryLevelIndicator?.setImageResource(R.drawable.battery_level2)
+                batteryLevelIndicator?.setColorFilter(amberColor)}
+            batteryPercentage >= 12.5 -> {
+                batteryLevelIndicator?.setImageResource(R.drawable.battery_level1)
+                batteryLevelIndicator?.setColorFilter(accentColor)}
+            batteryPercentage >= 0 -> {
+                batteryLevelIndicator?.setImageResource(R.drawable.battery_empty)
+                batteryLevelIndicator?.setColorFilter(accentColor)}
+        }
+
     }
 
     fun updateConnectionQualityIndicator(rssiLevel: Int){
@@ -463,6 +501,7 @@ class StreamfNIRSData : AppCompatActivity() {
     private fun stopPollingServiceData() {
         sqiPollingJob?.cancel()
         sqiPollingJob = null
+        updateBatteryLevelIndicator(BLEConnectionManager.readLatestBatteryLevel())
     }
 
     private fun updateSignalQualityViews(sqiList: List<Float>) {

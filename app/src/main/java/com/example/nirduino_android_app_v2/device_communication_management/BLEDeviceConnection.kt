@@ -30,7 +30,7 @@ class BleDeviceConnection(
     private var isManualDisconnect = false
     private var hasConnectedOnce = false
 
-    private val expectedChunkSizes = listOf(480, 480, 480, 480, 344)
+    private val expectedChunkSizes = listOf(480, 480, 480, 480, 344, 4)
     private val expectedTotalBytes = expectedChunkSizes.sum()
 
     private val receivedBuffers = mutableListOf<ByteArray>()
@@ -40,6 +40,9 @@ class BleDeviceConnection(
 
     val dataProcessor = DataParsingAndProcessing()
     var connectionRSSI = 0
+
+    var deviceBatteryLevel = 0
+
     companion object {
         val FNIRS_SERVICE_UUID: UUID = UUID.fromString("938548e6-c655-11ea-87d0-0242ac130003")
         val LED_CHARACTERISTIC_UUID: UUID = UUID.fromString("19B10001-E8F2-537E-4F6C-D104768A1213")
@@ -237,6 +240,7 @@ class BleDeviceConnection(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic
         ) {
+
             val data = characteristic.value
             val size = data.size
 
@@ -247,6 +251,8 @@ class BleDeviceConnection(
 
             val buffer = ByteBuffer.wrap(data)
             val isRoundReady = dataProcessor.convertByteToChannelData(buffer)
+
+            deviceBatteryLevel = dataProcessor.batteryLevel
 
         }
 
