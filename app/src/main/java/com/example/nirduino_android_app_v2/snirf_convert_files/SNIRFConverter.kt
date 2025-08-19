@@ -4,64 +4,73 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.*
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
-import com.example.nirduino_android_app_v2.participant_manager.data.local.SecureParticipantDb
-import kotlinx.coroutines.*
 import com.example.nirduino_android_app_v2.R
+import com.example.nirduino_android_app_v2.participant_manager.data.local.SecureParticipantDb
 import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import kotlinx.coroutines.*
 
 class SNIRFConverter : AppCompatActivity() {
 
-    private lateinit var spinnerLayout: Spinner
     private lateinit var spinnerParticipant: Spinner
-    private lateinit var buttonPickCsv: Button
-    private lateinit var textCsvName: TextView
-    private lateinit var editStimulusLabel: EditText
-    private lateinit var editNotes: EditText
+    private lateinit var buttonPickJSON: Button
+    private lateinit var textJSONName: TextView
+    private lateinit var fileQaTextView: TextView
     private lateinit var buttonGenerate: Button
+    private lateinit var outputTextView: TextView
 
-    private var csvUri: Uri? = null
-
-    companion object { private const val REQ_PICK_CSV = 42 }
+    private lateinit var pickJsonLauncher: ActivityResultLauncher<Intent>
+    private var jsonUri: Uri? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_snirfconverter)
+        setContentView(R.layout.activity_snirf_converter)
 
-        // ── view refs ─────────────────────────────────────────────
-        spinnerLayout       = findViewById(R.id.spinner_layout)
-        spinnerParticipant  = findViewById(R.id.spinner_participant)
-        buttonPickCsv       = findViewById(R.id.button_pick_csv)
-        textCsvName         = findViewById(R.id.text_csv_name)
-        editStimulusLabel   = findViewById(R.id.edit_stimulus_label)
-        editNotes           = findViewById(R.id.edit_notes)
-        buttonGenerate      = findViewById(R.id.button_generate_snirf)
+        // Views from your XML
+        spinnerParticipant = findViewById(R.id.spinner_participant)
+        buttonPickJSON     = findViewById(R.id.button_pick_json)
+        textJSONName       = findViewById(R.id.text_json_name)
+        fileQaTextView     = findViewById(R.id.fileQaTextView)
+        buttonGenerate     = findViewById(R.id.button_generate_snirf)
+        outputTextView     = findViewById(R.id.outputTextView)
 
-        populateLayoutSpinner()
         populateParticipantSpinner()
 
-        buttonPickCsv.setOnClickListener { pickCsv() }
+        // JSON picker
+        pickJsonLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val uri = result.data?.data
+                jsonUri = uri
+                uri?.let {
+                    textJSONName.text = "Selected File: ${getFileName(it)}"
+                    // Run QA immediately after selection
+                    runCatching { qaJson(it) }
+                        .onFailure { e ->
+                            fileQaTextView.text = "QA failed: ${e.message}"
+                            Log.e("SNIRF_QA", "QA error", e)
+                        }
+                } ?: run {
+                    textJSONName.text = "No file selected"
+                    fileQaTextView.text = ""
+                }
+            }
+        }
+
+        buttonPickJSON.setOnClickListener { pickJSON() }
         buttonGenerate.setOnClickListener { onGenerateClicked() }
     }
 
     // ───────────── helpers ─────────────
-
-    private fun populateLayoutSpinner() = CoroutineScope(Dispatchers.IO).launch {
-        val layoutNames = LayoutDataStore.getInstance(this@SNIRFConverter)
-            .getAllLayoutsByName()
-            .keys
-            .sorted()
-        withContext(Dispatchers.Main) {
-            spinnerLayout.adapter =
-                ArrayAdapter(this@SNIRFConverter,
-                    android.R.layout.simple_spinner_dropdown_item,
-                    layoutNames)
-        }
-    }
 
     private fun populateParticipantSpinner() = CoroutineScope(Dispatchers.IO).launch {
         val list = SecureParticipantDb.get(this@SNIRFConverter)
@@ -70,93 +79,131 @@ class SNIRFConverter : AppCompatActivity() {
             .sortedBy { it.subjectId }
         val labels = list.map { p -> "${p.subjectId} – ${p.age} y /${p.sex}" }
         withContext(Dispatchers.Main) {
-            spinnerParticipant.adapter =
-                ArrayAdapter(this@SNIRFConverter,
-                    android.R.layout.simple_spinner_dropdown_item,
-                    labels)
-            spinnerParticipant.tag = list          // stash full objects for later
+            spinnerParticipant.adapter = ArrayAdapter(
+                this@SNIRFConverter,
+                android.R.layout.simple_spinner_dropdown_item,
+                labels
+            )
+            spinnerParticipant.tag = list // stash full objects for later
         }
     }
 
-    private fun pickCsv() {
+    private fun getFileName(uri: Uri): String {
+        var name = "unknown"
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                name = cursor.getString(nameIndex)
+            }
+        }
+        return name
+    }
+
+    private fun readTextFromUri(uri: Uri): String =
+        contentResolver.openInputStream(uri)?.bufferedReader().use { it?.readText().orEmpty() }
+
+    // ───────────── pickers ─────────────
+
+    private fun pickJSON() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "text/*"                       // covers .csv
+            type = "application/json"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/json"))
         }
-        startActivityForResult(intent, REQ_PICK_CSV)
+        pickJsonLauncher.launch(intent)
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(req: Int, res: Int, data: Intent?) {
-        super.onActivityResult(req, res, data)
-        if (req == REQ_PICK_CSV && res == Activity.RESULT_OK) {
-            csvUri = data?.data
-            textCsvName.text = csvUri?.lastPathSegment ?: "No file selected"
+    // ───────────── QA & Generate ─────────────
+
+    private fun qaJson(uri: Uri) {
+        val raw = readTextFromUri(uri)
+        val root = JsonParser.parseString(raw).asJsonObject
+
+        val layoutName = root.get("layoutName")?.asString ?: "(missing)"
+        val deviceAlias = root.get("deviceAlias")?.asString ?: "(missing)"
+
+        // layout → unique sourceId/detectorId
+        val layoutArr = root.getAsJsonArray("layout")
+            ?: error("Missing 'layout' array")
+        val sources = mutableSetOf<Int>()
+        val detectors = mutableSetOf<Int>()
+        var potentialSourceYBug = false
+
+        layoutArr.forEach { el ->
+            val obj = el.asJsonObject
+            obj.get("sourceId")?.asInt?.let { sources.add(it) }
+            obj.get("detectorId")?.asInt?.let { detectors.add(it) }
+
+            // Sanity check for the reported export typo ("sourceY" set from sourceX)
+            val sx = obj.get("sourceX")?.asDouble
+            val sy = obj.get("sourceY")?.asDouble
+            if (sx != null && sy != null && sx == sy) potentialSourceYBug = true
         }
+
+        // rounds → count + stimuli labels
+        val roundsArr = root.getAsJsonArray("rounds") ?: error("Missing 'rounds' array")
+        val numRounds = roundsArr.size()
+        val allStimLabels = mutableListOf<String>()
+
+        roundsArr.forEach { rEl ->
+            val rObj = rEl.asJsonObject
+            val stimArr = rObj.getAsJsonArray("stimuli")
+            stimArr?.forEach { sEl ->
+                val sObj = sEl.asJsonObject
+                sObj.get("label")?.asString?.let { allStimLabels.add(it) }
+            }
+        }
+        val uniqueStimuli = allStimLabels.groupingBy { it }.eachCount() // label → count
+
+        val sb = StringBuilder()
+            .appendLine("Layout Name: $layoutName")
+            .appendLine("Device Alias: $deviceAlias")
+            .appendLine("Sources: ${sources.size}")
+            .appendLine("Detectors: ${detectors.size}")
+            .appendLine("Rounds: $numRounds")
+
+        if (uniqueStimuli.isEmpty()) {
+            sb.appendLine("Stimuli: (none)")
+        } else {
+            sb.appendLine("Stimuli:")
+            uniqueStimuli.forEach { (label, count) ->
+                sb.appendLine("  • $label × $count")
+            }
+        }
+
+        if (potentialSourceYBug) {
+            sb.appendLine()
+            sb.appendLine("⚠️ QA Note: Many layout entries have sourceY == sourceX.")
+            sb.appendLine("   Check your export: \"sourceY\" may have been set from sourceX.")
+        }
+
+        val summary = sb.toString()
+        fileQaTextView.text = summary
+        Log.d("SNIRF_QA", summary)
     }
 
     private fun onGenerateClicked() {
-        val layoutName   = spinnerLayout.selectedItem as? String
-        val participant  =
+        val participant =
             (spinnerParticipant.tag as? List<*>)?.get(spinnerParticipant.selectedItemPosition)
                     as? com.example.nirduino_android_app_v2.participant_manager.data.local.Participant
-        val stimLabel    = editStimulusLabel.text.toString().trim()
-        val notes        = editNotes.text.toString().trim()
 
         when {
-            layoutName == null  -> { toast("Pick a layout first."); return }
-            participant == null -> { toast("Pick a participant.");  return }
-            csvUri == null      -> { toast("Choose the data .csv file."); return }
-            stimLabel.isEmpty() -> { toast("Enter a stimulus label.");    return }
+            participant == null -> { toast("Pick a participant."); return }
+            jsonUri == null     -> { toast("Choose the data JSON file."); return }
         }
 
-        /* ---- layoutName is non-null past this point, but the compiler
-               loses that knowledge inside the coroutine.  ---- */
-        val layoutNameNN = layoutName   //  ❱ capture a non-null copy
+        // Log participant for traceability (optional)
+        Log.d("SNIRF", "Participant (JSON): ${Gson().toJson(participant)}")
 
-        lifecycleScope.launch {
+        // You can proceed with SNIRF generation using jsonUri + participant here.
+        // e.g., buildSnirfFromJson(jsonUri!!, participant, ...)
 
-            layoutName?.let { name ->
-
-                /* ① Load overlay elements off-thread */
-                val overlays = withContext(Dispatchers.IO) {
-                    LayoutDataStore.getInstance(this@SNIRFConverter)
-                        .loadOverlayElements(name)
-                }
-
-                /* ② Split into sources & detectors */
-                val sources   = overlays.filter { it.isSource }
-                val detectors = overlays.filter { !it.isSource }
-
-                /* ③ Log layout info */
-                Log.d("SNIRF", "====== Selected Layout: $name ======")
-                Log.d("SNIRF", "Sources (${sources.size}):")
-                sources.forEach { Log.d("SNIRF", "  (${it.x}, ${it.y})") }
-
-                Log.d("SNIRF", "Detectors (${detectors.size}):")
-                detectors.forEach { Log.d("SNIRF", "  (${it.x}, ${it.y})") }
-
-                /* ④ Log participant info  ── choose one style ─────────── */
-
-                // A. Verbose JSON dump (requires Gson import)
-                Log.d("SNIRF", "Participant (JSON): ${Gson().toJson(participant)}")
-
-                // B. Field-by-field (uncomment / adjust to your model)
-                // Log.d("SNIRF", "Participant → " +
-                //        "ID=${participant.subjectId}, " +
-                //        "Age=${participant.age}, " +
-                //        "Sex=${participant.sex}, " +
-                //        "Name=${participant.firstName} ${participant.lastName}")
-
-                Log.d("SNIRF", "=========================================")
-
-                /* ⑤ Continue with SNIRF generation */
-                // buildSnirf(name, participant, csvUri!!, stimLabel, notes)
-                toast("✓ Layout & participant data logged – ready to generate SNIRF.")
-            } ?: toast("Layout name disappeared 🤔")
-        }
-
+        outputTextView.text = "Ready to generate SNIRF from selected JSON."
+        toast("✓ QA complete. Ready to generate SNIRF.")
     }
+
+    private fun JsonObject.getAsJsonArrayOrNull(name: String) =
+        if (this.has(name) && this.get(name).isJsonArray) this.getAsJsonArray(name) else null
 
     private fun toast(msg: String) =
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
