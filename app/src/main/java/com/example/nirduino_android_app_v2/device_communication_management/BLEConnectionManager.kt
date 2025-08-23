@@ -61,7 +61,7 @@ class BLEConnectionManager : Service() {
     fun getLatestSQIValues():List<Float> {
         var currSQIValues = emptyList<Float>()
         activeConnections.values.forEach {
-            currSQIValues = it.getLatestSQIScores()
+            currSQIValues = it.getLatestSignalRating()
         }
         return currSQIValues
     }

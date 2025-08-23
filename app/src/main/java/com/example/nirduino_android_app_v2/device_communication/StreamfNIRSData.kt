@@ -85,10 +85,10 @@ class StreamfNIRSData : AppCompatActivity() {
         255, 255, 255, 255,
         255, 255, 255, 255,
         255, 255, 255, 255,  // regular power
-        75, 64, 75, 64,
-        75, 64, 75, 64,
-        75, 64, 75, 64,
-        75, 64, 75, 64
+        75, 81, 75, 81,
+        75, 81, 75, 81,
+        75, 81, 75, 81,
+        75, 81, 75, 81
     ) // low power
 
     // Dark, white-text-friendly, and distinct from your red/black plot lines
@@ -510,11 +510,10 @@ class StreamfNIRSData : AppCompatActivity() {
 
                 }
 
+                updateBatteryLevelIndicator(BLEConnectionManager.readLatestBatteryLevel())
 
             }
         }
-
-        updateBatteryLevelIndicator(BLEConnectionManager.readLatestBatteryLevel())
 
     }
 

@@ -177,8 +177,8 @@ class BleDeviceConnection(
         dataProcessor?.handleStimulusEvent(event)
     }
 
-    fun getLatestSQIScores(): List<Float> {
-        return dataProcessor.latestSQIScores
+    fun getLatestSignalRating(): List<Float> {
+        return dataProcessor.latestSignalRating
     }
 
     fun getChannelDisplayData(): List<DisplayChannelData> {

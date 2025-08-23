@@ -95,8 +95,8 @@ class SignalQualityOverlay @JvmOverloads constructor(
 
             val sqi = sqiList.getOrNull(i) ?: 0f
             val color = when {
-                sqi < 2f -> Color.RED
-                sqi <= 4f -> Color.parseColor("#FFC107") // amber
+                sqi <= 1f -> Color.RED
+                sqi <= 2f -> Color.parseColor("#FFC107") // amber
                 else -> Color.parseColor("#44AA99") // green-accessible
             }
 

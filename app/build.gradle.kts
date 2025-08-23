@@ -17,7 +17,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.nirduino_android_app_v2"
+        applicationId = "com.bbol.nirduino_android_app_v2"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

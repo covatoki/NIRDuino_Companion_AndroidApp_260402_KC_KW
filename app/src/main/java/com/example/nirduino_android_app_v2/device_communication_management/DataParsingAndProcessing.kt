@@ -57,8 +57,10 @@ class DataParsingAndProcessing {
 
     private val csvLines = mutableListOf<String>()
 
-    var latestSQIScores: List<Float> = emptyList()
+    var latestSignalRating: List<Float> = emptyList()
         private set
+
+    private val sqiWindowSeconds = 15.0f
 
     fun getHeader(): String {
         val header = StringBuilder()
@@ -133,7 +135,7 @@ class DataParsingAndProcessing {
                     isolateSpecificChannelData(logging = false)
 
                     // Get the SQI scores for the relevant channels
-                    updateSQIScores(5.0f, false)
+                    updateSQIScores(sqiWindowSeconds, false)
                 }
             }
             4 ->{
@@ -336,24 +338,24 @@ class DataParsingAndProcessing {
     }
 
     fun updateSQIScores(windowSeconds: Float = 5.0f, logData:Boolean=false) {
+        val fs = estimateSamplingRate()
+        val minSamples = max(2f, windowSeconds * fs).toInt()
+
         val (timestamps, red, ir) = getBufferedDataSQI(windowSeconds)
-        if (timestamps.size >= 2) {
-            val fs = estimateSamplingRate()
-            latestSQIScores = calculateSQI(red, ir, fs)
-
-            if (logData){
-                Log.i("SQI", "Updated SQI (fs=%.2f Hz) = %s".format(fs, latestSQIScores.joinToString { "%.2f".format(it) }))
-            }
-
+        if (timestamps.size >= minSamples) {
+            latestSignalRating = rateSignalQuality(red, ir, fs)
+            if (logData) Log.i("SQI","Updated SQI (fs=%.2f Hz) = %s"
+                .format(fs, latestSignalRating.joinToString { "%.2f".format(it) }))
         } else {
-            Log.w("SQI", "Not enough data to update SQI.")
+            Log.w("SQI", "Not enough data yet: have ${timestamps.size}, need $minSamples.")
         }
     }
 
-    fun calculateSQI(
-        redData: List<List<Float>>,     // OD2: Red (740 nm)
-        irData: List<List<Float>>,      // OD1: IR (850 nm)
-        fs: Float                       // Sampling frequency (Hz)
+    fun rateSignalQuality(
+        redData: List<List<Float>>,     // Raw detector intensity at 740 nm (Volts)
+        irData: List<List<Float>>,      // Raw detector intensity at 850 nm (Volts)
+        fs: Float,                      // Sampling frequency (Hz)
+        bias: Float = 1.5f              // Detector bias voltage to subtract
     ): List<Float> {
         val numSamples = redData.size
         if (numSamples == 0 || redData[0].isEmpty()) return emptyList()
@@ -361,87 +363,146 @@ class DataParsingAndProcessing {
         val numChannels = redData[0].size
         val sqiScores = MutableList(numChannels) { 1f }
 
-        for (ch in 0 until numChannels) {
-            val OD1 = irData.map { it[ch].toDouble() }.toDoubleArray()   // 850 nm (IR)
-            val OD2 = redData.map { it[ch].toDouble() }.toDoubleArray()  // 740 nm (Red)
+        // Allowed raw input voltage range BEFORE bias removal
+        val minAllowed = 1.40
+        val maxAllowed = 4.80
 
-            // STAGE 1 — Threshold check
-            if (OD1.any { it < 0.04 || it > 2.5 } || OD2.any { it < 0.04 || it > 2.5 }) {
+        for (ch in 0 until numChannels) {
+
+            val currChannel = ch + 1
+
+            // ── Step 0: Raw-voltage sanity check (pre-bias) ─────────────────────
+            val rawRed = redData.map { it[ch].toDouble() }
+            val rawIr  = irData.map { it[ch].toDouble() }
+
+            if (rawRed.any { it < minAllowed || it > maxAllowed } ||
+                rawIr.any  { it < minAllowed || it > maxAllowed }) {
                 sqiScores[ch] = 1f
+                Log.w("SQICalc", "Ch $currChannel: raw input outside ${minAllowed}–${maxAllowed} V → SQI=1")
                 continue
             }
 
-            // STAGE 1 — Flatline check
+//            Log.w("SQICalc", "Sampling Frequency: $fs")
+
+            // ── Step 1: Bias correction ─────────────────────────────────────────
+            val Ired = rawRed.map { it - bias }.toDoubleArray()
+            val Iir  = rawIr.map  { it - bias }.toDoubleArray()
+
+            // ── Step 2: Convert intensity → OD (baseline = mean of segment) ─────
+            val I0_red = Ired.average()
+            val I0_ir  = Iir.average()
+
+            val OD2 = DoubleArray(numSamples) { i -> ln(I0_red/Ired[i]) } // 740 nm
+            val OD1 = DoubleArray(numSamples) { i -> ln(I0_ir/Iir[i]) }   // 850 nm
+
+            // ── Stage 1A: Simple SNR on RAW voltages (no OD) ─────────────────────────────
+
+            // Pull raw volts for this channel
+            val vRed = redData.map { it[ch].toDouble() }.toDoubleArray()
+            val vIR  = irData.map { it[ch].toDouble() }.toDoubleArray()
+
+            // Means
+            val mR = vRed.average()
+            val mI = vIR.average()
+
+            // Standard deviations
+            fun std(x: DoubleArray, mean: Double): Double {
+                if (x.isEmpty()) return 0.0
+                var s = 0.0
+                for (v in x) s += (v - mean) * (v - mean)
+                return sqrt(s / x.size)
+            }
+            val sR = std(vRed, mR)
+            val sI = std(vIR,  mI)
+
+            // --- Choose SNR definition ---
+            // Bias‑corrected mean (recommended for photodiode rails with DC bias):
+            val snrRed = abs(mR) / sR
+            val snrIR  = abs(mI) / sI
+
+            // If you truly want *strict raw* without removing detector bias, replace the two lines above with:
+            // val snrRed = mR / sR
+            // val snrIR  = mI  / sI
+
+            // Use the better wavelength
+            val snrBest = max(snrRed, snrIR)
+
+            // Threshold (tune for your system). 2.0 ~= mean is 2× std
+            val snrThresh = 2.0
+
+            if (snrBest < snrThresh) {
+                sqiScores[ch] = 1f
+                Log.i("SQICalc", "Ch $currChannel: RAW-V SNR fail (${String.format("%.2f", snrBest)} < $snrThresh) → SQI=1")
+                continue
+            }
+
+            // ── Stage 1B: Flatline check ────────────────────────────────────────
             if (getStandardDeviation(OD1) == 0.0 || getStandardDeviation(OD2) == 0.0) {
                 sqiScores[ch] = 1f
+                Log.i("SQICalc", "Ch $currChannel: flatline OD → SQI=1")
                 continue
             }
 
-            // MBLL: Compute concentration changes in µM
-            // extinction coefficients (μM⁻¹·cm⁻¹)
+            // ── Step 3: MBLL (HbO2/Hb concentrations, µM) ───────────────────────
             val e = arrayOf(
-                doubleArrayOf(0.757, 0.798),  // 850nm: [HbO2, Hb]
-                doubleArrayOf(1.322, 0.382)   // 740nm: [HbO2, Hb]
+                doubleArrayOf(0.798, 0.757),  // 850 nm: [HbO2, Hb]
+                doubleArrayOf(0.382, 1.322)   // 740 nm: [HbO2, Hb]
             )
             val dpf = 6.0
             val d = 3.0  // cm
             val L = d * dpf
 
-            val deltaOD = arrayOf(OD1, OD2)  // [850nm, 740nm]
-            val oxy = DoubleArray(numSamples)
+            val oxy  = DoubleArray(numSamples)
             val deoxy = DoubleArray(numSamples)
-
             for (i in 0 until numSamples) {
-                val a = arrayOf(
-                    doubleArrayOf(e[0][0], e[0][1]),
-                    doubleArrayOf(e[1][0], e[1][1])
-                )
-                val b = doubleArrayOf(deltaOD[0][i] / L, deltaOD[1][i] / L)
-
-                // Solve 2x2 linear system: a * x = b
-                val det = a[0][0] * a[1][1] - a[0][1] * a[1][0]
+                val a00 = e[0][0]; val a01 = e[0][1]
+                val a10 = e[1][0]; val a11 = e[1][1]
+                val b0 = OD1[i] / L
+                val b1 = OD2[i] / L
+                val det = a00 * a11 - a01 * a10
                 if (det != 0.0) {
-                    oxy[i] = (b[0] * a[1][1] - b[1] * a[0][1]) / det
-                    deoxy[i] = (a[0][0] * b[1] - a[1][0] * b[0]) / det
+                    oxy[i]   = (b0 * a11 - b1 * a01) / det
+                    deoxy[i] = (a00 * b1 - a10 * b0) / det
                 } else {
-                    oxy[i] = 0.0
-                    deoxy[i] = 0.0
+                    oxy[i] = 0.0; deoxy[i] = 0.0
                 }
             }
 
-            // Filtering
-            val OD1_filt = firFilter(detrend(OD1), fs, doubleArrayOf(0.4, 3.0))
-            val OD2_filt = firFilter(detrend(OD2), fs, doubleArrayOf(0.4, 3.0))
-            val oxy_filt = firFilter(detrend(oxy), fs, doubleArrayOf(0.4, 3.0))
-            val dxy_filt = firFilter(detrend(deoxy), fs, doubleArrayOf(0.4, 3.0))
+            // ── Step 4: Detrend + Bandpass (0.4–3 Hz) ───────────────────────────
+            val band = doubleArrayOf(0.4, 3.0)
+            val OD1_filt = firFilter(detrend(OD1), fs, band)
+            val OD2_filt = firFilter(detrend(OD2), fs, band)
+            val oxy_filt = firFilter(detrend(oxy), fs, band)
+            val dxy_filt = firFilter(detrend(deoxy), fs, band)
 
-            // STAGE 1 — Hb imbalance
-            val ratio = ln(oxy_filt.sumOf { abs(it) } / dxy_filt.sumOf { abs(it) })
+            // ── Stage 1C: Hb imbalance ──────────────────────────────────────────
+            fun rms(x: DoubleArray) = sqrt(x.sumOf { it*it } / x.size)
+            val ratio = rms(oxy_filt) / rms(dxy_filt)
             if (ratio < 0.67) {
                 sqiScores[ch] = 1f
+                Log.i("SQICalc", "Ch $currChannel: Ratio is $ratio Hb imbalance < 0.67 → SQI=1")
                 continue
             }
 
-            // STAGE 2 — Autocorrelation difference
+            // ── Stage 2: Autocorrelation difference (very high quality) ─────────
             val ac1 = autocorrelate(OD1_filt)
             val ac2 = autocorrelate(OD2_filt)
             val stdDiff = getStandardDeviation(ac1.zip(ac2) { a, b -> a - b })
             if ((1 / stdDiff) > 40) {
                 sqiScores[ch] = 5f
+                Log.i("SQICalc", "Ch $currChannel: autocorr criterion met → SQI=5")
                 continue
             }
+            else{
+                Log.i("SQICalc", "Ch $currChannel: final SQI is $")
+                sqiScores[ch] = 3.0f
+            }
 
-            // STAGE 3 — Regression model
-            val stdOxy = getStandardDeviation(oxy_filt)
-            val stdDxy = getStandardDeviation(dxy_filt)
-            val logStdHb = ln(stdOxy / stdDxy)
-
-            val score = (logStdHb * 1.795613343002295 + 0.846108994828045).coerceIn(1.0, 5.0)
-            sqiScores[ch] = score.toFloat()
         }
 
         return sqiScores
     }
+
 
     fun getStandardDeviation(data: List<Double>): Double {
         if (data.size < 2) return 0.0
@@ -576,7 +637,7 @@ class DataParsingAndProcessing {
             Log.d(tag, valuesLine.toString())
         }
 
-        pruneBuffers(5.0f)  // Keep only last 5 seconds
+        pruneBuffers(sqiWindowSeconds)  // Keep only last 5 seconds
 
     }
 
@@ -596,7 +657,7 @@ class DataParsingAndProcessing {
         bufferedTimestamps.clear()
         bufferedRedSamples.clear()
         bufferedIrSamples.clear()
-        latestSQIScores = emptyList()
+        latestSignalRating = emptyList()
 
         this.ledIntensityValues = ledIntensityValues
         resetTimeStamps()
