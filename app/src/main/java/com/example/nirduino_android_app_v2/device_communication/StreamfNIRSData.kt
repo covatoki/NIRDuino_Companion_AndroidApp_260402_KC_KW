@@ -79,16 +79,28 @@ class StreamfNIRSData : AppCompatActivity() {
 
     var fNIRSData:List<DataRound> = emptyList()
 
+//    var ledIntensityValues: IntArray = intArrayOf(
+//        1,
+//        200, 200, 200, 200,
+//        200, 200, 200, 200,
+//        200, 200, 200, 200,
+//        200, 200, 200, 200,  // regular power
+//        0, 0, 0, 0,
+//        0, 0, 0, 0,
+//        0, 0, 0, 0,
+//        0, 0, 0, 0
+//    ) // low power
+
     var ledIntensityValues: IntArray = intArrayOf(
         1,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,  // regular power
-        75, 81, 75, 81,
-        75, 81, 75, 81,
-        75, 81, 75, 81,
-        75, 81, 75, 81
+        200, 200, 200, 200,
+        200, 200, 200, 200,
+        200, 200, 200, 200,
+        200, 200, 200, 200,  // regular power
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0
     ) // low power
 
     // Dark, white-text-friendly, and distinct from your red/black plot lines
@@ -695,7 +707,7 @@ class StreamfNIRSData : AppCompatActivity() {
             Log.d("CHANNEL_DATA", "Loaded ${channelCoords.size} channels")
 
             //
-            val channelLabels = channelCoords.mapIndexed { index, _ -> "Ch ${channelCoords[index].channelNumber+1} (${channelCoords[index].type})" }
+            val channelLabels = channelCoords.mapIndexed { index, _ -> "Ch ${channelCoords[index].channelNumber+1} (${channelCoords[index].type} ) S${channelCoords[index].sourceId}:D${channelCoords[index].detectorId}" }
 
             channelSpinner.adapter = ArrayAdapter(
                 this@StreamfNIRSData,

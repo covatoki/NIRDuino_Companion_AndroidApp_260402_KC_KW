@@ -173,8 +173,8 @@ class SNIRFConverter : AppCompatActivity() {
 
         if (potentialSourceYBug) {
             sb.appendLine()
-            sb.appendLine("⚠️ QA Note: Many layout entries have sourceY == sourceX.")
-            sb.appendLine("   Check your export: \"sourceY\" may have been set from sourceX.")
+//            sb.appendLine("⚠️ QA Note: Many layout entries have sourceY == sourceX.")
+//            sb.appendLine("   Check your export: \"sourceY\" may have been set from sourceX.")
         }
 
         val summary = sb.toString()
