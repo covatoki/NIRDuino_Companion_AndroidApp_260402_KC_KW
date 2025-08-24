@@ -43,7 +43,7 @@ class ChannelPlotView @JvmOverloads constructor(
     private var ir: List<Float> = emptyList()
 
     // Configure the rolling window (seconds)
-    var windowSeconds: Float = 30f
+    var windowSeconds: Float = 10f
 
     // === Stimulus highlight data ===
     private data class StimulusInterval(val label: String, val start: Float, var end: Float? = null)
@@ -93,13 +93,12 @@ class ChannelPlotView @JvmOverloads constructor(
         val iR = irSeries.subList(start, irSeries.size)
 
         // Moving window
-        val tLast = t.last()
-        val cutoff = tLast - windowSeconds
+        val cutoff = t.last()- windowSeconds
         val firstIdx = t.indexOfFirst { it >= cutoff }.let { if (it == -1) 0 else it }
-
         ts  = t.subList(firstIdx, t.size)
         red = r.subList(firstIdx, r.size)
         ir  = iR.subList(firstIdx, iR.size)
+
 
         invalidate()
     }

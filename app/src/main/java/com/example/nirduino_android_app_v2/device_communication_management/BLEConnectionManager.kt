@@ -66,13 +66,46 @@ class BLEConnectionManager : Service() {
         return currSQIValues
     }
 
-    fun getLatestfNIRSdata():List<DataRound>{
-        var currfNIRSData = emptyList<DataRound>()
-        activeConnections.values.forEach(){
-            currfNIRSData = it.dataProcessor.roundWiseData
-        }
-        return currfNIRSData
+    // Safer: returns only the last `maxPoints` of the *latest* round
+    fun getLatestfNIRSData(maxPoints: Int = Int.MAX_VALUE): List<DataRound> {
+        // pick one connection's dataProcessor (your original logic)
+        var rounds: List<DataRound> = emptyList()
+        activeConnections.values.forEach { rounds = it.dataProcessor.roundWiseData }
+
+        if (rounds.isEmpty()) return emptyList()
+
+        val lastRound = rounds.last()
+
+        // Defensive sizes
+        val n = lastRound.timestamps.size
+        if (n == 0) return listOf(
+            DataRound(
+                timestamps = mutableListOf(),
+                redData = mutableListOf(),
+                irData = mutableListOf(),
+                stimuli = lastRound.stimuli.toMutableList() // keep current stimuli state
+            )
+        )
+
+        val k = maxPoints.coerceAtLeast(0)
+        val from = (n - k).coerceAtLeast(0)
+        val to = n
+
+        // Snapshot copies so UI can’t race with producer
+        val ts  = lastRound.timestamps.subList(from, to).toList()
+        val red = lastRound.redData.subList(from, to).map { it.toList() }
+        val ir  = lastRound.irData.subList(from, to).map { it.toList() }
+
+        return listOf(
+            DataRound(
+                timestamps = ts.toMutableList(),
+                redData    = red.toMutableList(),
+                irData     = ir.toMutableList(),
+                stimuli    = lastRound.stimuli.toMutableList()
+            )
+        )
     }
+
 
     fun getChannelDisplayData(): List<DisplayChannelData>{
         var currentChannelDisplayData : List<DisplayChannelData> = emptyList()
@@ -375,8 +408,8 @@ class BLEConnectionManager : Service() {
             selectedLayoutName = layoutName
         }
 
-        fun getLatestfNIRSData():List<DataRound>{
-            return connectionManagerInstance?.getLatestfNIRSdata() ?: emptyList()
+        fun getLatestfNIRSData(maxPoints:Int):List<DataRound>{
+            return connectionManagerInstance?.getLatestfNIRSData(maxPoints) ?: emptyList()
         }
 
         fun hardResetTimer() {

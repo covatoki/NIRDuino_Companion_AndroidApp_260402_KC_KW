@@ -81,26 +81,26 @@ class StreamfNIRSData : AppCompatActivity() {
 
 //    var ledIntensityValues: IntArray = intArrayOf(
 //        1,
-//        200, 200, 200, 200,
-//        200, 200, 200, 200,
-//        200, 200, 200, 200,
-//        200, 200, 200, 200,  // regular power
-//        0, 0, 0, 0,
-//        0, 0, 0, 0,
-//        0, 0, 0, 0,
+//        200, 150, 200, 150,
+//        200, 150, 200, 150,
+//        200, 150, 200, 150,
+//        200, 150, 200, 150,  // regular power
+//        88, 88, 88, 88,
+//        88, 88, 88, 88,
+//        88, 88, 88, 88,
 //        0, 0, 0, 0
 //    ) // low power
 
     var ledIntensityValues: IntArray = intArrayOf(
         1,
-        200, 200, 200, 200,
-        200, 200, 200, 200,
-        200, 200, 200, 200,
-        200, 200, 200, 200,  // regular power
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0
+        200, 150, 200, 150,
+        200, 150, 200, 150,
+        200, 150, 200, 150,
+        200, 150, 200, 150,  // regular power
+        88, 88, 88, 88,
+        88, 88, 88, 88,
+        88, 88, 88, 88,
+        88, 88, 88, 88
     ) // low power
 
     // Dark, white-text-friendly, and distinct from your red/black plot lines
@@ -141,14 +141,12 @@ class StreamfNIRSData : AppCompatActivity() {
     var layoutNames: List<String> = emptyList()
 
     // rolling buffers for the selected channel
-    private val maxPoints = 600  // ~60s if ~10 Hz; adjust to taste
+    private val maxPoints = 90  // ~60s if ~10 Hz; adjust to taste
     private var currentChannelSpinnerIndex = 0
     // Rolling plot buffers + window control
     private val tsBuffer = ArrayDeque<Float>()
     private val redBuffer = ArrayDeque<Float>()
     private val irBuffer  = ArrayDeque<Float>()
-    private var lastPlottedTs = -1f
-    private val windowSeconds = 10f   // moving window length
 
     // Stable mapping: label -> palette index
     private val stimIndexMap = linkedMapOf<String, Int>()
@@ -174,6 +172,8 @@ class StreamfNIRSData : AppCompatActivity() {
 
         channelSpinner = findViewById(R.id.spinner_channels)
         channelPlotView = findViewById(R.id.channel_plot_view)
+
+        channelPlotView.windowSeconds = 10.0f
 
         signalQualityIndicator = findViewById(R.id.image_signal)
         batteryLevelIndicator = findViewById(R.id.image_battery)
@@ -467,6 +467,7 @@ class StreamfNIRSData : AppCompatActivity() {
                 }
                 delay(pollIntervalMs)
 
+                // Get live RSSI update
                 try{
                     Log.w("pollingRSSI", "REQUESTED")
                     BLEConnectionManager.requestConnectionSignalLevel()
@@ -474,7 +475,7 @@ class StreamfNIRSData : AppCompatActivity() {
 
                 try{
                     // Get the latest fNIRS data and update on-screen visuals
-                    fNIRSData = BLEConnectionManager.getLatestfNIRSData()
+                    fNIRSData = BLEConnectionManager.getLatestfNIRSData(maxPoints)
                     var latestTimestamp = fNIRSData[fNIRSData.size-1].timestamps.last().toDouble()
                     var latestTimeStampString = String.format("%.2f", latestTimestamp) + " s"
                     onScreenTimer.setText(latestTimeStampString)
