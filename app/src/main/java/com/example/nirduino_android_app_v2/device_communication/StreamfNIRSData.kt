@@ -793,8 +793,8 @@ class StreamfNIRSData : AppCompatActivity() {
                     BLEConnectionManager.getDeviceBatteryLevel()
                     batteryLevelIndicator?.setColorFilter(R.color.white)
 
-                    // Update the
-                    layoutInit(0)
+                    val currentIndex = layoutNames.indexOf(selectedLayoutName).coerceAtLeast(0)
+                    layoutInit(currentIndex)  // ✅ preserves the user's selection
 
                     return@launch
 

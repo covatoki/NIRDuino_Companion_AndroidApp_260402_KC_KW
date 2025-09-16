@@ -296,14 +296,20 @@ class BLEConnectionManager : Service() {
         // keep global selected layout name
         var selectedLayoutName = "unknown"
 
-        fun startService(context: Context, alias: String, layoutJson: String, layoutName: String = "unknown") {
+        fun startService(
+            context: Context,
+            alias: String,
+            layoutJson: String,
+            layoutName: String = "unknown"
+        ) {
             val intent = Intent(context, BLEConnectionManager::class.java).apply {
                 putExtra(EXTRA_COMMAND, COMMAND_START)
                 putExtra(EXTRA_DEVICE_ALIAS, alias)
                 putExtra(EXTRA_LAYOUT_JSON, layoutJson)
             }
-            // **** bug fix: actually set the layout name passed in ****
-            selectedLayoutName = layoutName
+            if (layoutName.isNotBlank() && layoutName != "unknown") {
+                selectedLayoutName = layoutName   // ✅ no clobbering
+            }
             context.startForegroundService(intent)
         }
 
