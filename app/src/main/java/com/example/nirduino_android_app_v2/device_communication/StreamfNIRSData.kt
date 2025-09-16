@@ -79,28 +79,16 @@ class StreamfNIRSData : AppCompatActivity() {
 
     var fNIRSData:List<DataRound> = emptyList()
 
-//    var ledIntensityValues: IntArray = intArrayOf(
-//        1,
-//        200, 150, 200, 150,
-//        200, 150, 200, 150,
-//        200, 150, 200, 150,
-//        200, 150, 200, 150,  // regular power
-//        88, 88, 88, 88,
-//        88, 88, 88, 88,
-//        88, 88, 88, 88,
-//        0, 0, 0, 0
-//    ) // low power
-
     var ledIntensityValues: IntArray = intArrayOf(
         1,
-        200, 150, 200, 150,
-        200, 150, 200, 150,
-        200, 150, 200, 150,
-        200, 150, 200, 150,  // regular power
-        88, 88, 88, 88,
-        88, 88, 88, 88,
-        88, 88, 88, 88,
-        88, 88, 88, 88
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+        255, 255, 255, 255, // regular power
+        80, 65, 80, 65,
+        80, 65, 80, 65,
+        80, 65, 80, 65,
+        80, 65, 80, 65
     ) // low power
 
     // Dark, white-text-friendly, and distinct from your red/black plot lines

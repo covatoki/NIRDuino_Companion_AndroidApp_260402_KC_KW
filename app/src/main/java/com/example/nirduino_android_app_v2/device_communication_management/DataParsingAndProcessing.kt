@@ -592,7 +592,7 @@ class DataParsingAndProcessing {
             if (channel.type == ChannelType.LONG){
 
                 val redIndex = (channel.sourceId-1)*2
-                val irIndex = (channel.sourceId)*2
+                val irIndex = (channel.sourceId-1)*2+1
 
                 val red  = dataArray[redIndex][channel.detectorId-1]
                 val ir  = dataArray[irIndex][channel.detectorId-1]
@@ -689,7 +689,7 @@ class DataParsingAndProcessing {
     fun saveDataLog(fileName: String) {
         val baseDir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-            "NIRDuino Companion/RawSessionData/"
+            "NIRDuinoCompanion/RawSessionData/"
         )
         if (!baseDir.exists()) baseDir.mkdirs()
 
@@ -714,10 +714,9 @@ class DataParsingAndProcessing {
 
         val baseDir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-            "NIRDuino Companion/RawSessionData/"
+            "NIRDuinoCompanion/RawSessionData/"
         )
         if (!baseDir.exists()) baseDir.mkdirs()
-
 
         // Store data in large, legacy .csv format
         saveDataLog(fileName_csv)

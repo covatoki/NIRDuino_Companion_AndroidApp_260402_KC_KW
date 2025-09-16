@@ -2,7 +2,10 @@ package com.example.nirduino_android_app_v2.device_communication_management
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.*
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.bluetooth.*
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
@@ -17,7 +20,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.example.nirduino_android_app_v2.R
 import com.example.nirduino_android_app_v2.device_manager_files.KnownDeviceDataStore
-import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,100 +27,82 @@ import kotlinx.coroutines.launch
 
 class BLEConnectionManager : Service() {
 
-    private val serviceScope = HandlerThread("BLEServiceThread").apply { start() }
-    private val serviceHandler = Handler(serviceScope.looper)
+    private val serviceThread = HandlerThread("BLEServiceThread").apply { start() }
+    private val serviceHandler = Handler(serviceThread.looper)
 
-    val activeConnections = mutableMapOf<String, BleDeviceConnection>()
+    // ***** Single-connection state *****
+    private var connection: BleDeviceConnection? = null
+    private var targetMac: String? = null
+    private var targetAlias: String? = null
+
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private var bluetoothLeScanner: BluetoothLeScanner? = null
     private val scanCallback = BleScanCallback()
-    private var targetMacs = emptySet<String>()
-    private var macToAliasMap = mapOf<String, String>()
+
     private var layoutOverlayElements: List<com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement> = emptyList()
 
     @Volatile
     private var configurationReadyToStream: Boolean = false
 
-    fun getStreamReadinessStatus(): Boolean {
-        return configurationReadyToStream
-    }
+    fun getStreamReadinessStatus(): Boolean = configurationReadyToStream
 
     @SuppressLint("MissingPermission")
     fun startStreamFromDevice(ledIntensityValues: IntArray) {
-        activeConnections.values.forEach { it.streamNIRDuinoData(ledIntensityValues) }
+        connection?.streamNIRDuinoData(ledIntensityValues)
     }
 
     @SuppressLint("MissingPermission")
-    fun getBatteryLevelFromDevice(){
-        activeConnections.values.forEach { it.requestDeviceForBatteryLevel() }
+    fun getBatteryLevelFromDevice() {
+        connection?.requestDeviceForBatteryLevel()
     }
 
     @SuppressLint("MissingPermission")
     fun stopStreamingFromDevice() {
-        activeConnections.values.forEach { it.stopStreamNIRDuinoData() }
+        connection?.stopStreamNIRDuinoData()
     }
 
-    fun getLatestSQIValues():List<Float> {
-        var currSQIValues = emptyList<Float>()
-        activeConnections.values.forEach {
-            currSQIValues = it.getLatestSignalRating()
-        }
-        return currSQIValues
+    fun getLatestSQIValues(): List<Float> {
+        return connection?.getLatestSignalRating() ?: emptyList()
     }
 
-    // Safer: returns only the last `maxPoints` of the *latest* round
+    // Returns last round (optionally truncated to maxPoints)
     fun getLatestfNIRSData(maxPoints: Int = Int.MAX_VALUE): List<DataRound> {
-        // pick one connection's dataProcessor (your original logic)
-        var rounds: List<DataRound> = emptyList()
-        activeConnections.values.forEach { rounds = it.dataProcessor.roundWiseData }
-
+        val rounds = connection?.dataProcessor?.roundWiseData ?: emptyList()
         if (rounds.isEmpty()) return emptyList()
-
-        val lastRound = rounds.last()
-
-        // Defensive sizes
-        val n = lastRound.timestamps.size
-        if (n == 0) return listOf(
-            DataRound(
-                timestamps = mutableListOf(),
-                redData = mutableListOf(),
-                irData = mutableListOf(),
-                stimuli = lastRound.stimuli.toMutableList() // keep current stimuli state
+        val last = rounds.last()
+        val n = last.timestamps.size
+        if (n == 0) {
+            return listOf(
+                DataRound(
+                    timestamps = mutableListOf(),
+                    redData = mutableListOf(),
+                    irData = mutableListOf(),
+                    stimuli = last.stimuli.toMutableList()
+                )
             )
-        )
-
-        val k = maxPoints.coerceAtLeast(0)
-        val from = (n - k).coerceAtLeast(0)
-        val to = n
-
-        // Snapshot copies so UI can’t race with producer
-        val ts  = lastRound.timestamps.subList(from, to).toList()
-        val red = lastRound.redData.subList(from, to).map { it.toList() }
-        val ir  = lastRound.irData.subList(from, to).map { it.toList() }
-
+        }
+        val from = (n - maxPoints).coerceAtLeast(0)
+        val ts = last.timestamps.subList(from, n).toList()
+        val red = last.redData.subList(from, n).map { it.toList() }
+        val ir = last.irData.subList(from, n).map { it.toList() }
         return listOf(
             DataRound(
                 timestamps = ts.toMutableList(),
-                redData    = red.toMutableList(),
-                irData     = ir.toMutableList(),
-                stimuli    = lastRound.stimuli.toMutableList()
+                redData = red.toMutableList(),
+                irData = ir.toMutableList(),
+                stimuli = last.stimuli.toMutableList()
             )
         )
     }
 
-
-    fun getChannelDisplayData(): List<DisplayChannelData>{
-        var currentChannelDisplayData : List<DisplayChannelData> = emptyList()
-        activeConnections.values.forEach(){
-            it.dataProcessor.extractfNIRSChannelDataUsingLayout()
-            currentChannelDisplayData = it.getChannelDisplayData()
-        }
-        return currentChannelDisplayData
+    fun getChannelDisplayData(): List<DisplayChannelData> {
+        connection?.dataProcessor?.extractfNIRSChannelDataUsingLayout()
+        return connection?.getChannelDisplayData() ?: emptyList()
     }
 
     override fun onCreate() {
         super.onCreate()
-        registerInstance(this)  // ✅ This is the missing link
+        registerInstance(this)
         startForegroundService()
     }
 
@@ -132,20 +116,15 @@ class BLEConnectionManager : Service() {
         val alias = intent?.getStringExtra(EXTRA_DEVICE_ALIAS)
 
         if (!layoutJson.isNullOrBlank()) {
-            val gson = Gson()
-            val overlays = try {
-                gson.fromJson(layoutJson, Array<com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement>::class.java).toList()
+            layoutOverlayElements = try {
+                Gson().fromJson(
+                    layoutJson,
+                    Array<com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement>::class.java
+                ).toList()
             } catch (e: Exception) {
-                Log.e("BLEConnectionManager", "❌ Failed to parse layout JSON", e)
+                Log.e("BLEConnectionManager", "Failed to parse layout JSON", e)
                 emptyList()
             }
-
-            overlays.forEach {
-                Log.d("BLEConnectionManager", "✅ Layout Element: ${if (it.isSource) "Source" else "Detector"} ${it.id} → x=${it.x}, y=${it.y}")
-            }
-
-            // Store if needed
-            layoutOverlayElements = overlays
         }
 
         when (intent?.getStringExtra(EXTRA_COMMAND)) {
@@ -157,7 +136,6 @@ class BLEConnectionManager : Service() {
                 }
             }
             COMMAND_STOP -> {
-                Log.d("BLEConnectionManager", "Stop command received")
                 stopSelf()
             }
             else -> Log.w("BLEConnectionManager", "Unknown or missing command")
@@ -166,7 +144,6 @@ class BLEConnectionManager : Service() {
         return START_STICKY
     }
 
-
     @SuppressLint("MissingPermission")
     private fun loadSingleDeviceAlias(alias: String) {
         serviceHandler.post {
@@ -174,19 +151,17 @@ class BLEConnectionManager : Service() {
                 try {
                     val deviceStore = KnownDeviceDataStore.getInstance(applicationContext)
                     val aliasToMacMap = deviceStore.getAllDeviceAliasesWithMac()
-
                     val mac = aliasToMacMap[alias]
-                    if (mac != null) {
-                        macToAliasMap = mapOf(mac to alias)
-                        targetMacs = setOf(mac)
-
-                        configurationReadyToStream = false
-                        startBleScan()
-
-                        Log.d("BLEConnectionManager", "Started scan for alias: $alias, MAC: $mac")
-                    } else {
+                    if (mac == null) {
                         Log.e("BLEConnectionManager", "Alias not found: $alias")
+                        return@launch
                     }
+                    // set single-target
+                    targetAlias = alias
+                    targetMac = mac
+                    configurationReadyToStream = false
+                    startBleScan()
+                    Log.d("BLEConnectionManager", "Started scan for alias: $alias, MAC: $mac")
                 } catch (e: Exception) {
                     Log.e("BLEConnectionManager", "Failed to load alias", e)
                 }
@@ -198,9 +173,9 @@ class BLEConnectionManager : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopBleScan()
-        activeConnections.values.forEach { it.disconnect() }
-        activeConnections.clear()
-        serviceScope.quitSafely()
+        connection?.disconnect()
+        connection = null
+        serviceThread.quitSafely()
         Log.d("BLEConnectionManager", "Service closed")
     }
 
@@ -212,43 +187,22 @@ class BLEConnectionManager : Service() {
     }
 
     private fun startForegroundService() {
-        val notificationChannelId = "BLEConnectionManagerChannel"
+        val channelId = "BLEConnectionManagerChannel"
         val channel = NotificationChannel(
-            notificationChannelId,
+            channelId,
             "BLE Connection Manager",
             NotificationManager.IMPORTANCE_LOW
         )
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .createNotificationChannel(channel)
 
-        val notification: Notification = NotificationCompat.Builder(this, notificationChannelId)
+        val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("BLE Service Running")
-            .setContentText("Managing BLE connections in background.")
+            .setContentText("Managing BLE connection in background.")
             .setSmallIcon(R.drawable.ic_ble)
             .build()
 
         startForeground(1, notification)
-    }
-
-    @SuppressLint("MissingPermission")
-    fun loadDeviceAliasesToConnect(deviceAliases: List<String>) {
-        serviceHandler.post {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    val deviceStore = KnownDeviceDataStore.getInstance(applicationContext)
-                    val aliasToMacMap = deviceStore.getAllDeviceAliasesWithMac()
-
-                    macToAliasMap = aliasToMacMap.entries.associate { (alias, mac) -> mac to alias }
-                    targetMacs = deviceAliases.mapNotNull { aliasToMacMap[it] }.toSet()
-
-                    configurationReadyToStream = false
-                    startBleScan()
-                    Log.d("BLEConnectionManager", "Started scan for: $targetMacs")
-                } catch (e: Exception) {
-                    Log.e("BLEConnectionManager", "Failed to load devices", e)
-                }
-            }
-        }
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_SCAN)
@@ -259,12 +213,10 @@ class BLEConnectionManager : Service() {
             Log.e("BLEConnectionManager", "Bluetooth is disabled")
             return
         }
-
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
             Log.e("BLEConnectionManager", "Missing BLUETOOTH_SCAN permission")
             return
         }
-
         bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
         bluetoothLeScanner?.startScan(scanCallback)
         Log.d("BLEConnectionManager", "BLE scan started")
@@ -276,68 +228,61 @@ class BLEConnectionManager : Service() {
             Log.e("BLEConnectionManager", "Missing BLUETOOTH_SCAN permission")
             return
         }
-
         bluetoothLeScanner?.stopScan(scanCallback)
         Log.d("BLEConnectionManager", "BLE scan stopped")
     }
 
     private fun updateConfigurationReadiness() {
-        configurationReadyToStream = targetMacs.isNotEmpty() && targetMacs.all { mac ->
-            activeConnections[mac]?.isConnected() == true
-        }
+        configurationReadyToStream = connection?.isConnected() == true
         Log.d("BLEConnectionManager", "Configuration ready to stream: $configurationReadyToStream")
     }
 
     private inner class BleScanCallback : ScanCallback() {
-
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val device = result.device
-            val mac = device.address
+            val mac = result.device.address
+            val target = targetMac ?: return
+            if (mac != target) return
+            if (connection != null) return // already set
 
-            if (mac in targetMacs && !activeConnections.containsKey(mac)) {
-                if (ActivityCompat.checkSelfPermission(this@BLEConnectionManager, Manifest.permission.BLUETOOTH_CONNECT)
-                    != PackageManager.PERMISSION_GRANTED
-                ) {
-                    Log.e("BLEConnectionManager", "Missing BLUETOOTH_CONNECT permission for $mac")
-                    return
-                }
-
-                val alias = macToAliasMap[mac] ?: mac
-                val connection = BleDeviceConnection(applicationContext, device, alias, selectedLayoutName)
-
-                updateLayoutOverlayElements(connection)
-
-                connection.onConnected = {
-                    Log.d("BLEConnectionManager", "CONNECTED: $alias")
-                    updateConfigurationReadiness()
-                }
-
-                connection.onDisconnected = {
-                    Log.d("BLEConnectionManager", "DISCONNECTED: $alias")
-                    configurationReadyToStream = false
-
-                }
-
-                // 🔽 NEW: Handle incoming data from this device
-                connection.onDataReceived = { _, alias ->
-                    val displayData = connection.dataProcessor.channelDisplayData
-                    DisplayDataFormatter.saveDisplayDataToCSV(applicationContext, displayData, "${alias}_filtered_data.csv")
-                }
-
-                activeConnections[mac] = connection
-                connection.connect()
+            if (ActivityCompat.checkSelfPermission(this@BLEConnectionManager, Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.e("BLEConnectionManager", "Missing BLUETOOTH_CONNECT permission for $mac")
+                return
             }
+
+            // Stop scanning once we find our target
+            stopBleScan()
+
+            val alias = targetAlias ?: mac
+            val conn = BleDeviceConnection(applicationContext, result.device, alias, selectedLayoutName)
+            conn.dataProcessor.layoutOverlayElements = layoutOverlayElements
+
+            conn.onConnected = {
+                Log.d("BLEConnectionManager", "CONNECTED: $alias")
+                updateConfigurationReadiness()
+            }
+            conn.onDisconnected = {
+                Log.d("BLEConnectionManager", "DISCONNECTED: $alias")
+                configurationReadyToStream = false
+            }
+            conn.onDataReceived = { _, a ->
+                val displayData = conn.dataProcessor.channelDisplayData
+                DisplayDataFormatter.saveDisplayDataToCSV(
+                    applicationContext,
+                    displayData,
+                    "${a}_filtered_data.csv"
+                )
+            }
+
+            connection = conn
+            conn.connect()
         }
 
         override fun onScanFailed(errorCode: Int) {
             Log.e("BLEConnectionManager", "BLE scan failed: $errorCode")
         }
-    }
-
-    fun updateLayoutOverlayElements(connection: BleDeviceConnection){
-        // Assign layout overlay
-        connection.dataProcessor.layoutOverlayElements = layoutOverlayElements
     }
 
     companion object {
@@ -347,16 +292,19 @@ class BLEConnectionManager : Service() {
         const val COMMAND_STOP = "stop"
         const val EXTRA_DEVICE_ALIAS = "device_alias"
         const val EXTRA_LAYOUT_JSON = "layout_json"
+
+        // keep global selected layout name
         var selectedLayoutName = "unknown"
 
-        fun startService(context: Context, alias: String, layoutJson: String) {
+        fun startService(context: Context, alias: String, layoutJson: String, layoutName: String = "unknown") {
             val intent = Intent(context, BLEConnectionManager::class.java).apply {
                 putExtra(EXTRA_COMMAND, COMMAND_START)
                 putExtra(EXTRA_DEVICE_ALIAS, alias)
-                putExtra(EXTRA_LAYOUT_JSON, layoutJson) // 🔽 new
+                putExtra(EXTRA_LAYOUT_JSON, layoutJson)
             }
+            // **** bug fix: actually set the layout name passed in ****
+            selectedLayoutName = layoutName
             context.startForegroundService(intent)
-            this.selectedLayoutName = selectedLayoutName
         }
 
         private var connectionManagerInstance: BLEConnectionManager? = null
@@ -372,17 +320,15 @@ class BLEConnectionManager : Service() {
             connectionManagerInstance = instance
         }
 
-        fun getStreamReadinessStatus(): Boolean {
-            val returnValue =  connectionManagerInstance?.getStreamReadinessStatus() ?: false
-            return returnValue
-        }
+        fun getStreamReadinessStatus(): Boolean =
+            connectionManagerInstance?.getStreamReadinessStatus() ?: false
 
         fun startStreamFromDevice(ledIntensityValues: IntArray, layoutName: String) {
-            connectionManagerInstance?.startStreamFromDevice(ledIntensityValues)
             selectedLayoutName = layoutName
+            connectionManagerInstance?.startStreamFromDevice(ledIntensityValues)
         }
 
-        fun getDeviceBatteryLevel(){
+        fun getDeviceBatteryLevel() {
             connectionManagerInstance?.getBatteryLevelFromDevice()
         }
 
@@ -391,57 +337,35 @@ class BLEConnectionManager : Service() {
         }
 
         fun broadcastStimulusEvent(event: StimulusEvent) {
-            connectionManagerInstance?.activeConnections?.values?.forEach {
-                it.logStimulusEvent(event)
-            }
+            connectionManagerInstance?.connection?.logStimulusEvent(event)
         }
 
-        fun getLatestSQIValues(): List<Float>? {
-            return connectionManagerInstance?.getLatestSQIValues()
-        }
+        fun getLatestSQIValues(): List<Float> =
+            connectionManagerInstance?.getLatestSQIValues() ?: emptyList()
 
-        fun getChannelDisplayData(): List<DisplayChannelData> {
-            return connectionManagerInstance?.getChannelDisplayData() ?: emptyList()
-        }
+        fun getChannelDisplayData(): List<DisplayChannelData> =
+            connectionManagerInstance?.getChannelDisplayData() ?: emptyList()
 
-        fun setLayoutName(layoutName:String){
+        fun setLayoutName(layoutName: String) {
             selectedLayoutName = layoutName
         }
 
-        fun getLatestfNIRSData(maxPoints:Int):List<DataRound>{
-            return connectionManagerInstance?.getLatestfNIRSData(maxPoints) ?: emptyList()
-        }
+        fun getLatestfNIRSData(maxPoints: Int): List<DataRound> =
+            connectionManagerInstance?.getLatestfNIRSData(maxPoints) ?: emptyList()
 
         fun hardResetTimer() {
-            connectionManagerInstance?.activeConnections?.values?.forEach {
-                it.resetTimeStamps()
-            }
+            connectionManagerInstance?.connection?.resetTimeStamps()
         }
 
         @SuppressLint("MissingPermission")
-        fun requestConnectionSignalLevel(){
-            connectionManagerInstance?.activeConnections?.values?.forEach {
-                it.requestCurrentRSSI()
-            }
+        fun requestConnectionSignalLevel() {
+            connectionManagerInstance?.connection?.requestCurrentRSSI()
         }
 
-        fun readLatestSignalLevel(): Int {
-            var currRSSI = 0
-            connectionManagerInstance?.activeConnections?.values?.forEach {
-                currRSSI =  it.connectionRSSI
-            }
-            return currRSSI
-        }
+        fun readLatestSignalLevel(): Int =
+            connectionManagerInstance?.connection?.connectionRSSI ?: 0
 
-        fun readLatestBatteryLevel(): Int {
-            var currBatteryLevel = 0
-            connectionManagerInstance?.activeConnections?.values?.forEach {
-                currBatteryLevel = it.deviceBatteryLevel
-            }
-            return currBatteryLevel
-        }
-
+        fun readLatestBatteryLevel(): Int =
+            connectionManagerInstance?.connection?.deviceBatteryLevel ?: 0
     }
-
-
 }
