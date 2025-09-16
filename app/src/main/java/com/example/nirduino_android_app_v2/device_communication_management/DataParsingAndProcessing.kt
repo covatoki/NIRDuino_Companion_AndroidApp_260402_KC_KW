@@ -55,12 +55,16 @@ class DataParsingAndProcessing {
     private val currentRound: DataRound?
         get() = roundWiseData.lastOrNull()
 
-    private val csvLines = mutableListOf<String>()
-
     var latestSignalRating: List<Float> = emptyList()
         private set
 
     private val sqiWindowSeconds = 15.0f
+
+    // at top of DataParsingAndProcessing
+    private var csvLogger: CsvSessionLogger? = null
+
+    // rolling cap for UI memory (keep ~N newest samples)
+    private val MAX_SAMPLES_IN_MEMORY = 1200  // e.g., ~2 minutes at 10 Hz; tune as needed
 
     fun getHeader(): String {
         val header = StringBuilder()
@@ -173,10 +177,29 @@ class DataParsingAndProcessing {
         return if (avgInterval > 0f) 1f / avgInterval else 0f
     }
 
+    fun beginSessionLogging(context: Context, deviceAlias: String, layoutName: String) {
+        if (csvLogger == null) {
+            csvLogger = CsvSessionLogger(context, deviceAlias, layoutName).also {
+                it.start(::getHeader)
+            }
+        }
+    }
+
+    fun endSessionLogging(context: Context? = null) {
+        try {
+            if (context != null) {
+                moveCsvToPublicFolderIfNeeded(context)
+            }
+        } catch (_: Exception) {}
+
+        csvLogger?.close()
+        csvLogger = null
+    }
+
     fun logDataPoint() {
         val lineBuilder = StringBuilder()
         lineBuilder.append(timestampSeconds)
-        lineBuilder.append(", ")  // Placeholder for stimulus label, can update later
+        lineBuilder.append(", ")
         lineBuilder.append(getStimulusString())
 
         for (s in 0..7) {
@@ -191,12 +214,22 @@ class DataParsingAndProcessing {
                 lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2 + 16])
             }
         }
-
         for (d in 0 until 16) {
             lineBuilder.append(", ").append(darkCurrentMeasurements[d])
         }
 
-        csvLines.add(lineBuilder.toString())
+        // ✅ stream to file (no RAM growth)
+        csvLogger?.appendLine(lineBuilder.toString())
+    }
+
+    private fun moveCsvToPublicFolderIfNeeded(context: Context) {
+        val src = csvLogger?.absolutePath?.let { File(it) } ?: return
+        val dstDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            "NIRDuinoCompanion/RawSessionData/"
+        ).apply { if (!exists()) mkdirs() }
+        val dst = File(dstDir, src.name)
+        try { src.copyTo(dst, overwrite = true) } catch (_: Exception) {}
     }
 
     fun getStimulusString(): String {
@@ -675,66 +708,58 @@ class DataParsingAndProcessing {
 
     fun appendSampleToCurrentRound(
         currentTimestamp: Float,
-        redValues: List<Float>,    // length = nChannels
-        irValues: List<Float>      // length = nChannels
+        redValues: List<Float>,
+        irValues: List<Float>
     ) {
-
         val roundIndex = roundWiseData.lastIndex
-        roundWiseData[roundIndex].timestamps.add(currentTimestamp)
-        roundWiseData[roundIndex].redData.add(redValues)
-        roundWiseData[roundIndex].irData.add(irValues)
+        val round = roundWiseData[roundIndex]
 
+        round.timestamps.add(currentTimestamp)
+        round.redData.add(redValues)
+        round.irData.add(irValues)
+
+        // ✅ rolling cap
+        val excess = round.timestamps.size - MAX_SAMPLES_IN_MEMORY
+        if (excess > 0) {
+            // drop oldest 'excess' samples to keep memory bounded
+            round.timestamps.subList(0, excess).clear()
+            round.redData.subList(0, excess).clear()
+            round.irData.subList(0, excess).clear()
+        }
     }
 
-    fun saveDataLog(fileName: String) {
-        val baseDir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-            "NIRDuinoCompanion/RawSessionData/"
-        )
-        if (!baseDir.exists()) baseDir.mkdirs()
-
-        val file = File(baseDir, fileName)
-
-        val content = StringBuilder()
-        content.append(getHeader()).append("\n")
-        csvLines.forEach { content.append(it).append("\n") }
-
-        file.writeText(content.toString())
-        Log.i("BackupCSV", "Saved backup CSV to ${file.absolutePath}")
-    }
-
-
-    fun saveSessionToFile(context: Context, deviceAlias: String, layoutName:String = "unknown"): String {
-
+    fun saveSessionToFile(context: Context, deviceAlias: String, layoutName: String = "unknown"): String {
         val sdf = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
         val timestampStr = sdf.format(java.util.Date())
 
-        val fileName_csv = "${deviceAlias}_${layoutName}_$timestampStr.csv"
-        val fileName_json = "${deviceAlias}_${layoutName}_$timestampStr.json"
-
         val baseDir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
             "NIRDuinoCompanion/RawSessionData/"
         )
         if (!baseDir.exists()) baseDir.mkdirs()
 
-        // Store data in large, legacy .csv format
-        saveDataLog(fileName_csv)
+        // Use the already-open/closed streamed CSV
+        val csvPath = csvLogger?.absolutePath ?: run {
+            // If stream already ended, the logger is null. If you want the file path,
+            // prefer using the CsvSessionLogger's app-scoped directory; or pass it in when closing.
+            // For now just leave empty if unknown.
+            ""
+        }
 
-        // Store data in new json format
-        val file = File(baseDir, fileName_json)
+        val manifestFile = File(baseDir, "${deviceAlias}_${layoutName}_$timestampStr.json")
 
-        // Build the export structure
         val exportData = mapOf(
             "deviceAlias" to deviceAlias,
             "layoutName" to layoutName,
+            "samplingHz_est" to estimateSamplingRate(),
+            "csvPath" to csvPath,  // 👉 reference the streamed CSV
             "layout" to channelDisplayData.map {
                 mapOf(
                     "channelNumber" to it.channelNumber,
                     "sourceId" to it.sourceId,
                     "detectorId" to it.detectorId,
                     "sourceX" to it.sourceX,
-                    "sourceY" to it.sourceX,
+                    "sourceY" to it.sourceY,
                     "detectorX" to it.detectorX,
                     "detectorY" to it.detectorY,
                     "x" to it.x,
@@ -742,30 +767,22 @@ class DataParsingAndProcessing {
                     "type" to it.type.name
                 )
             },
-            "rounds" to roundWiseData.map { round ->
+            // Optionally keep a tiny slice for quick preview (not required):
+            "preview" to (roundWiseData.lastOrNull()?.let { r ->
                 mapOf(
-                    "timestamps" to round.timestamps,
-                    "redData" to round.redData,
-                    "irData" to round.irData,
-                    "stimuli" to round.stimuli.map { stim ->
-                        mapOf(
-                            "label" to stim.label,
-                            "onset" to stim.onset,
-                            "duration" to stim.duration
-                        )
-                    }
+                    "timestamps_tail" to r.timestamps.takeLast(50),
+                    "red_tail" to r.redData.takeLast(50),
+                    "ir_tail" to r.irData.takeLast(50)
                 )
-            }
+            } ?: emptyMap<String, Any>())
         )
 
-        // Save as JSON
-        val json = Gson().toJson(exportData)
-        file.writeText(json)
-
-        Log.i("SessionSave", "Saved data to ${file.absolutePath}")
-
-        return file.absolutePath
+        val json = com.google.gson.Gson().toJson(exportData)
+        manifestFile.writeText(json)
+        Log.i("SessionSave", "Saved manifest to ${manifestFile.absolutePath}")
+        return manifestFile.absolutePath
     }
+
 
 
 }

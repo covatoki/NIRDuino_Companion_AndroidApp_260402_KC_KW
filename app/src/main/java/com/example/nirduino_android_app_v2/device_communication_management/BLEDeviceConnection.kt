@@ -78,8 +78,10 @@ class BleDeviceConnection(
             bluetoothGatt?.writeCharacteristic(characteristic) ?: false
         }
 
-        Log.d("BleDeviceConnection", "Sent START stream command to $alias, success: $success")
+        dataProcessor.beginSessionLogging(context, alias, BLEConnectionManager.selectedLayoutName)
         dataProcessor.startNewDataRound(this.ledIntensityValues)
+        Log.d("BleDeviceConnection", "Sent START stream command to $alias, success: $success")
+
     }
 
     fun getCommandString(intArray: IntArray): String {
@@ -108,6 +110,9 @@ class BleDeviceConnection(
         }
         Log.d("BleDeviceConnection", "Sent STOP stream command to $alias, success: $success")
         dataProcessor.resetTimeStamps()
+
+        dataProcessor.endSessionLogging(context)
+
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -155,6 +160,7 @@ class BleDeviceConnection(
         bluetoothGatt = null
         Log.d("BleDeviceConnection", "Manually disconnected from $alias")
         dataProcessor.saveSessionToFile(context, alias, BLEConnectionManager.selectedLayoutName)
+        dataProcessor.endSessionLogging(context)
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
