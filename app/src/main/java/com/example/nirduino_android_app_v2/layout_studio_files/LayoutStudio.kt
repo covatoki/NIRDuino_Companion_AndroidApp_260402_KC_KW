@@ -34,25 +34,38 @@ class LayoutStudio : AppCompatActivity() {
                 val json = inputStream.bufferedReader().use { it.readText() }
 
                 try {
-                    val jsonMap = Gson().fromJson(json, Map::class.java)
+                    val gson = Gson()
+                    val jsonMap = gson.fromJson(json, Map::class.java)
 
-                    val layoutItemJson = Gson().toJson(jsonMap)
-                    val importedItem = Gson().fromJson(layoutItemJson, LayoutStudioItem::class.java)
+                    val layoutItemJson = gson.toJson(jsonMap)
+                    val importedItem = gson.fromJson(layoutItemJson, LayoutStudioItem::class.java)
 
                     adapter.addItem(importedItem)
                     saveLayoutItemsToDataStore(adapter.getItems())
 
-                    val overlayList = (jsonMap["overlayElements"] as? List<Map<String, Any>>)?.map {
+                    // ---- Parse overlayElements safely (robust to Double/Long/Int) ----
+                    val rawOverlayList = (jsonMap["overlayElements"] as? List<*>)?.mapNotNull { elem ->
+                        val m = elem as? Map<*, *> ?: return@mapNotNull null
+                        val idNum = m["id"] as? Number
+                        val isSource = m["isSource"] as? Boolean
+                        val xNum = m["x"] as? Number
+                        val yNum = m["y"] as? Number
+
+                        if (idNum == null || isSource == null || xNum == null || yNum == null) return@mapNotNull null
+
                         OverlayElement(
-                            id = (it["id"] as Double).toInt(),
-                            isSource = it["isSource"] as Boolean,
-                            x = (it["x"] as Double).toFloat(),
-                            y = (it["y"] as Double).toFloat()
+                            id = idNum.toInt(),
+                            isSource = isSource,
+                            x = xNum.toFloat(),
+                            y = yNum.toFloat()
                         )
                     } ?: emptyList()
 
+                    // ---- Normalize negatives by shifting so minX/minY == 0 (only if needed) ----
+                    val normalizedOverlayList = normalizeOverlayElements(rawOverlayList)
+
                     lifecycleScope.launch {
-                        layoutStore.saveOverlayElements(importedItem.layoutName, overlayList)
+                        layoutStore.saveOverlayElements(importedItem.layoutName, normalizedOverlayList)
                     }
 
                     Toast.makeText(this, "Layout imported successfully", Toast.LENGTH_SHORT).show()
@@ -64,6 +77,27 @@ class LayoutStudio : AppCompatActivity() {
             }
         }
     }
+
+    /**
+     * If any x or y is negative, shift the entire set so the minimum x/y becomes 0.
+     * Keeps values as-is if already non-negative.
+     */
+    private fun normalizeOverlayElements(list: List<OverlayElement>): List<OverlayElement> {
+        if (list.isEmpty()) return list
+
+        val minX = list.minOf { it.x }
+        val minY = list.minOf { it.y }
+
+        val shiftX = if (minX < 0f) -minX else 0f
+        val shiftY = if (minY < 0f) -minY else 0f
+
+        if (shiftX == 0f && shiftY == 0f) return list // nothing to do
+
+        return list.map { e ->
+            e.copy(x = e.x + shiftX, y = e.y + shiftY)
+        }
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
