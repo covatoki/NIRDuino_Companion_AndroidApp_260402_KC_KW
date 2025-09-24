@@ -79,17 +79,19 @@ class StreamfNIRSData : AppCompatActivity() {
 
     var fNIRSData:List<DataRound> = emptyList()
 
-    var ledIntensityValues: IntArray = intArrayOf(
-        1,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255, // regular power
-        80, 65, 80, 65,
-        80, 65, 80, 65,
-        80, 65, 80, 65,
-        80, 65, 80, 65
-    ) // low power
+    var ledIntensityValues: IntArray  // low power
+        get() = intArrayOf(
+            1,
+            255, 125, 255, 125,
+            255, 125, 255, 125,
+            255, 125, 255, 125,
+            255, 125, 255, 125, // regular power
+            80, 78, 80, 78,
+            80, 78, 80, 78,
+            80, 78, 80, 78,
+            80, 78, 80, 78
+        )
+        set(value) = TODO()
 
     // Dark, white-text-friendly, and distinct from your red/black plot lines
     private val STIM_COLORS = intArrayOf(
@@ -630,45 +632,63 @@ class StreamfNIRSData : AppCompatActivity() {
             return
         }
 
+        // Use a stable order so indices don’t jump around between runs
+        layoutNames = layoutNames.sorted()
+
         layoutSpinner.adapter = ArrayAdapter(
             this@StreamfNIRSData,
             android.R.layout.simple_spinner_dropdown_item,
             layoutNames
         )
 
-        layoutSpinner.setSelection(0)  // Will t
-        selectedLayoutName = layoutNames[0]
+        // If nothing chosen yet, select the first *without* firing the listener
+        if (selectedLayoutName == null) {
+            selectedLayoutName = layoutNames.firstOrNull()
+            layoutSpinner.setSelection(0, /* animate = */ false)
+        } else {
+            // Preserve a previously set selection if present
+            val idx = layoutNames.indexOf(selectedLayoutName).coerceAtLeast(0)
+            layoutSpinner.setSelection(idx, /* animate = */ false)
+        }
 
-        BLEConnectionManager.setLayoutName(selectedLayoutName!!)
+        // Only proceed if we really have a name
+        val initialLayout = selectedLayoutName
+        if (initialLayout == null) {
+            Log.w("LAYOUT_SPINNER", "No initial layout selected; waiting for user selection.")
+        } else {
+            // Keep the service in sync with the currently selected layout
+            BLEConnectionManager.setLayoutName(initialLayout)
 
-        val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
-        sources = overlays.filter { it.isSource }
-        detectors = overlays.filter { !it.isSource }
+            // Load overlays for the *currently selected* layout
+            val overlays = layoutDataStore.loadOverlayElements(initialLayout)
+            sources = overlays.filter { it.isSource }
+            detectors = overlays.filter { !it.isSource }
 
-        channelCoords = BLEConnectionManager.getChannelDisplayData()
+            // Channel coords come from the service; may be empty before stream
+            channelCoords = BLEConnectionManager.getChannelDisplayData()
 
-        sqiOverlay.setOverlayData(
-            sourceList = sources,
-            detectorList = detectors,
-            channelList = channelCoords
-        )
+            sqiOverlay.setOverlayData(
+                sourceList = sources,
+                detectorList = detectors,
+                channelList = channelCoords
+            )
 
-        Log.d("LayoutSpinnerSETUP", sources.toString())
-        Log.d("LayoutSpinnerSETUP", detectors.toString())
-        Log.d("LayoutSpinnerSETUP", channelCoords.toString())
+            Log.d("LayoutSpinnerSETUP", "sources=$sources")
+            Log.d("LayoutSpinnerSETUP", "detectors=$detectors")
+            Log.d("LayoutSpinnerSETUP", "channelCoords=$channelCoords")
+        }
 
+        // Now handle user selection changes
         layoutSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-
-                    layoutInit(position)
-
+                layoutInit(position)
             }
-
             override fun onNothingSelected(parent: AdapterView<*>?) {
                 Log.d("LAYOUT_SPINNER", "Nothing selected")
             }
         }
     }
+
 
     fun layoutInit(position:Int){
 
@@ -755,10 +775,13 @@ class StreamfNIRSData : AppCompatActivity() {
             val overlays = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
             val gson = Gson()
             val layoutJson = gson.toJson(overlays)
-            BLEConnectionManager.startService(this@StreamfNIRSData, alias, layoutJson)
 
-            // Update layout data and ensure calculations are performed
-
+            BLEConnectionManager.startService(
+                this@StreamfNIRSData,
+                alias = alias,
+                layoutJson = layoutJson,
+                layoutName = selectedLayoutName!!   // ✅ pass it
+            )
 
             // Prevent user from changing the device in use
             aliasSpinner.isEnabled = false;
@@ -820,7 +843,7 @@ class StreamfNIRSData : AppCompatActivity() {
     }
 
     private fun isBluetoothEnabled(): Boolean {
-        val manager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val manager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         val adapter: BluetoothAdapter? = manager.adapter
         return adapter?.isEnabled == true
     }

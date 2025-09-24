@@ -139,6 +139,9 @@ dependencies {
 
     implementation("org.apache.commons:commons-math3:3.6.1")
 
+    implementation("com.google.android.gms:play-services-base:18.5.0")
+
+
 }
 
 /* ---------- KAPT speed-ups ---------- */

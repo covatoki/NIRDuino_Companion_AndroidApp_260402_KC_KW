@@ -233,23 +233,13 @@ class DataParsingAndProcessing {
     }
 
     fun getStimulusString(): String {
-
-        var stimulusString = ""
-
-        var index = 0;
-        for(stimulus in currentRound?.stimuli!!){
-
-            if (index <= currentRound?.stimuli!!.size){
-                stimulusString = stimulusString + index.toString() + ":"
-            }
-            else{
-                stimulusString = stimulusString + index.toString()
-            }
-
-            index++
-        }
-
-        return currentRound?.stimuli.toString()
+        val r = currentRound ?: return ""
+        // Compact, readable: "0:Label@onset+duration; 1:..."
+        return r.stimuli.mapIndexed { idx, s ->
+            val onset = "%.2f".format(s.onset)
+            val dur   = "%.2f".format(s.duration)
+            "$idx:${s.label}@$onset+$dur"
+        }.joinToString("; ")
     }
 
     private fun generateDataArray() {
@@ -642,7 +632,7 @@ class DataParsingAndProcessing {
             else{
 
                 val redIndex = (channel.sourceId-1)*2 + 16
-                val irIndex = (channel.sourceId)*2 + 16
+                val irIndex = (channel.sourceId-1)*2 + 17
 
                 val red  = dataArray[redIndex][channel.detectorId-1]
                 val ir  = dataArray[irIndex][channel.detectorId-1]
@@ -686,15 +676,19 @@ class DataParsingAndProcessing {
     }
 
     fun startNewDataRound(ledIntensityValues: IntArray) {
-
+        // Clear rolling SQI buffers and last ratings
         bufferedTimestamps.clear()
         bufferedRedSamples.clear()
         bufferedIrSamples.clear()
         latestSignalRating = emptyList()
 
+        // Update LED levels for this round
         this.ledIntensityValues = ledIntensityValues
+
+        // Start timestamps at 0 for the new round (CSV will just continue appending rows)
         resetTimeStamps()
 
+        // Push a fresh round
         roundWiseData.add(
             DataRound(
                 timestamps = mutableListOf(),
@@ -703,7 +697,6 @@ class DataParsingAndProcessing {
                 stimuli = mutableListOf()
             )
         )
-        resetTimeStamps()
     }
 
     fun appendSampleToCurrentRound(
@@ -738,50 +731,68 @@ class DataParsingAndProcessing {
         )
         if (!baseDir.exists()) baseDir.mkdirs()
 
-        // Use the already-open/closed streamed CSV
-        val csvPath = csvLogger?.absolutePath ?: run {
-            // If stream already ended, the logger is null. If you want the file path,
-            // prefer using the CsvSessionLogger's app-scoped directory; or pass it in when closing.
-            // For now just leave empty if unknown.
-            ""
+        // Path to the streamed CSV (may be empty string if logger already closed)
+        val csvPath = csvLogger?.absolutePath ?: ""
+
+        // --- Channel metadata (from latest computed layout) ---
+        // If channelDisplayData is empty, write an empty list (still valid JSON)
+        val channelsMeta = channelDisplayData.map {
+            mapOf(
+                "channelNumber" to it.channelNumber,
+                "type" to it.type.name,      // "LONG" or "SHORT"
+                "sourceId" to it.sourceId,
+                "detectorId" to it.detectorId,
+                "sourceX" to it.sourceX,
+                "sourceY" to it.sourceY,
+                "detectorX" to it.detectorX,
+                "detectorY" to it.detectorY,
+                "x" to it.x,                 // midpoint
+                "y" to it.y
+            )
         }
 
-        val manifestFile = File(baseDir, "${deviceAlias}_${layoutName}_$timestampStr.json")
+        // --- All rounds, channel-wise dump ---
+        // Each round contains: timestamps, redData (List<List<Float>>), irData (List<List<Float>>)
+        // redData/irData are per-sample vectors aligned to channelsMeta ordering at sampling time.
+        val roundsJson = roundWiseData.mapIndexed { idx, r ->
+            mapOf(
+                "roundIndex" to idx,
+                "nSamples" to r.timestamps.size,
+                "timestamps" to r.timestamps,     // List<Float>
+                "redData" to r.redData,           // List<List<Float>>
+                "irData" to r.irData,             // List<List<Float>>
+                "stimuli" to r.stimuli.map { s ->
+                    mapOf(
+                        "label" to s.label,
+                        "onset" to s.onset,
+                        "duration" to s.duration
+                    )
+                }
+            )
+        }
 
-        val exportData = mapOf(
+        val export = mapOf(
+            // session-level
             "deviceAlias" to deviceAlias,
             "layoutName" to layoutName,
+            "exportedAt" to timestampStr,
             "samplingHz_est" to estimateSamplingRate(),
-            "csvPath" to csvPath,  // 👉 reference the streamed CSV
-            "layout" to channelDisplayData.map {
-                mapOf(
-                    "channelNumber" to it.channelNumber,
-                    "sourceId" to it.sourceId,
-                    "detectorId" to it.detectorId,
-                    "sourceX" to it.sourceX,
-                    "sourceY" to it.sourceY,
-                    "detectorX" to it.detectorX,
-                    "detectorY" to it.detectorY,
-                    "x" to it.x,
-                    "y" to it.y,
-                    "type" to it.type.name
-                )
-            },
-            // Optionally keep a tiny slice for quick preview (not required):
-            "preview" to (roundWiseData.lastOrNull()?.let { r ->
-                mapOf(
-                    "timestamps_tail" to r.timestamps.takeLast(50),
-                    "red_tail" to r.redData.takeLast(50),
-                    "ir_tail" to r.irData.takeLast(50)
-                )
-            } ?: emptyMap<String, Any>())
+            "csvPath" to csvPath,
+
+            // structure
+            "channels" to channelsMeta,      // channel metadata (current layout)
+            "roundCount" to roundWiseData.size,
+            "rounds" to roundsJson           // full multi-round dump
         )
 
-        val json = com.google.gson.Gson().toJson(exportData)
+        val json = Gson().toJson(export)
+        val manifestFile = File(baseDir, "${deviceAlias}_${layoutName}_$timestampStr.json")
         manifestFile.writeText(json)
+
         Log.i("SessionSave", "Saved manifest to ${manifestFile.absolutePath}")
         return manifestFile.absolutePath
     }
+
 
 
 

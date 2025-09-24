@@ -308,7 +308,7 @@ class BLEConnectionManager : Service() {
                 putExtra(EXTRA_LAYOUT_JSON, layoutJson)
             }
             if (layoutName.isNotBlank() && layoutName != "unknown") {
-                selectedLayoutName = layoutName   // ✅ no clobbering
+                selectedLayoutName = layoutName  // ✅ save the chosen layout
             }
             context.startForegroundService(intent)
         }
