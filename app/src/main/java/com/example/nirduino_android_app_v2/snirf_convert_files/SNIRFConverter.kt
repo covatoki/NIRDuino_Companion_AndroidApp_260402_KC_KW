@@ -54,7 +54,7 @@ class SNIRFConverter : AppCompatActivity() {
     private var jsonUri: Uri? = null
 
     private val cloudRunBaseUrl =
-        "https://data2snirf-fcr5zisowq-vp.a.run.app"
+        "https://data2snirf-444205871889.us-south1.run.app"
 
     // replace your httpClient with this
     private val httpClient by lazy {
