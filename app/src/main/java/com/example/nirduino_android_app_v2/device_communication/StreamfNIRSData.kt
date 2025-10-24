@@ -199,6 +199,10 @@ class StreamfNIRSData : AppCompatActivity() {
             if (!isConnected) {
                 attemptConnection(alias)
             } else {
+
+                // Get all notes from experiment
+
+
                 BLEConnectionManager.stopService(this)
                 val redCircle = ContextCompat.getDrawable(this@StreamfNIRSData, R.drawable.red_circle)
                 redCircle?.setBounds(0, 0, redCircle.intrinsicWidth, redCircle.intrinsicHeight)
@@ -221,7 +225,7 @@ class StreamfNIRSData : AppCompatActivity() {
             // Disable addition/removal of any stimulus
             addStimulusButton.isEnabled = false;
             addStimulusButton.isVisible = false;
-            
+
         }
 
         streamToggleButton.setOnClickListener {
@@ -831,7 +835,6 @@ class StreamfNIRSData : AppCompatActivity() {
                     statusTextView.setCompoundDrawables(null, null, null, null)
                     statusTextView.text = "Connecting to $alias... ($it)"
                     stopPollingServiceData()
-
                 }
                 delay(500)
             }
