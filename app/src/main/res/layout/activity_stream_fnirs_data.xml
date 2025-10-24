@@ -186,7 +186,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Stimulus library and notes:"
+        android:text="Meta-data:"
         app:layout_constraintBottom_toTopOf="@id/stimulus_bar"
         android:textSize="@dimen/font_size_header2"/>
 
@@ -228,6 +228,7 @@
                 android:textSize="@dimen/font_size_header3"/>
 
             <EditText
+                android:id="@+id/notebox"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:hint="Enter any notes in this text box..."

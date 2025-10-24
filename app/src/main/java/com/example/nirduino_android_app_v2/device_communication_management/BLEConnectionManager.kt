@@ -31,7 +31,7 @@ class BLEConnectionManager : Service() {
     private val serviceHandler = Handler(serviceThread.looper)
 
     // ***** Single-connection state *****
-    private var connection: BleDeviceConnection? = null
+    var connection: BleDeviceConnection? = null
     private var targetMac: String? = null
     private var targetAlias: String? = null
 
@@ -63,6 +63,10 @@ class BLEConnectionManager : Service() {
 
     fun getLatestSQIValues(): List<Float> {
         return connection?.getLatestSignalRating() ?: emptyList()
+    }
+
+    fun saveSessionNotes(sessionNotes: String){
+        connection?.dataProcessor?.sessionNotes = sessionNotes
     }
 
     // Returns last round (optionally truncated to maxPoints)
@@ -277,7 +281,7 @@ class BLEConnectionManager : Service() {
             }
 
             connection = conn
-            conn.connect()
+            connection?.connect()
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -315,7 +319,10 @@ class BLEConnectionManager : Service() {
 
         private var connectionManagerInstance: BLEConnectionManager? = null
 
-        fun stopService(context: Context) {
+        fun stopService(context: Context, sessionNotes: String) {
+
+            connectionManagerInstance?.saveSessionNotes(sessionNotes)
+
             val intent = Intent(context, BLEConnectionManager::class.java).apply {
                 putExtra(EXTRA_COMMAND, COMMAND_STOP)
             }

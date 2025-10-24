@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import kotlinx.coroutines.isActive
 import com.google.android.material.button.MaterialButton
+import kotlin.math.exp
 
 class StreamfNIRSData : AppCompatActivity() {
 
@@ -71,6 +72,8 @@ class StreamfNIRSData : AppCompatActivity() {
 
     private var signalQualityIndicator: ImageView? = null
     private var batteryLevelIndicator: ImageView? = null
+
+    private lateinit var experimentalNotes: EditText
 
     data class StimulusLabel(
         val label: String,
@@ -143,6 +146,7 @@ class StreamfNIRSData : AppCompatActivity() {
     private val stimIndexMap = linkedMapOf<String, Int>()
     private var nextStimIndex = 0
 
+
     // When the user switches channels, we already clear buffers in onItemSelected;
     // keep that behavior.
 
@@ -170,6 +174,8 @@ class StreamfNIRSData : AppCompatActivity() {
         batteryLevelIndicator = findViewById(R.id.image_battery)
 
         onScreenTimer = findViewById(R.id.text_timer)
+
+        experimentalNotes =  findViewById(R.id.notebox)
 
         lifecycleScope.launch {
 
@@ -201,9 +207,9 @@ class StreamfNIRSData : AppCompatActivity() {
             } else {
 
                 // Get all notes from experiment
+                var sessionNotes = experimentalNotes.text.toString()
 
-
-                BLEConnectionManager.stopService(this)
+                BLEConnectionManager.stopService(this, sessionNotes)
                 val redCircle = ContextCompat.getDrawable(this@StreamfNIRSData, R.drawable.red_circle)
                 redCircle?.setBounds(0, 0, redCircle.intrinsicWidth, redCircle.intrinsicHeight)
                 statusTextView.setCompoundDrawables(redCircle, null, null, null)
@@ -873,7 +879,7 @@ class StreamfNIRSData : AppCompatActivity() {
         BLEConnectionManager.hardResetTimer()
 
         if (isConnected) {
-            BLEConnectionManager.stopService(this)
+            BLEConnectionManager.stopService(this, "App closed abruptly/incorrectly")
             Log.i("StreamfNIRSData", "Foreground BLE service stopped on activity destroy")
         }
 

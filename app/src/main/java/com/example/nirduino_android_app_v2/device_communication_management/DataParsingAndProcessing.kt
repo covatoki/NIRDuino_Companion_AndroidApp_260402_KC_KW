@@ -66,6 +66,8 @@ class DataParsingAndProcessing {
     // rolling cap for UI memory (keep ~N newest samples)
     private val MAX_SAMPLES_IN_MEMORY = 1200  // e.g., ~2 minutes at 10 Hz; tune as needed
 
+    var sessionNotes: String = "";
+
     fun getHeader(): String {
         val header = StringBuilder()
         header.append("Time,Stimulus")
@@ -782,7 +784,8 @@ class DataParsingAndProcessing {
             // structure
             "channels" to channelsMeta,      // channel metadata (current layout)
             "roundCount" to roundWiseData.size,
-            "rounds" to roundsJson           // full multi-round dump
+            "rounds" to roundsJson,           // full multi-round dump
+            "sessionNotes" to sessionNotes
         )
 
         val json = Gson().toJson(export)
