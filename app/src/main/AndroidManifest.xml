@@ -28,6 +28,10 @@
         android:theme="@style/Theme.NIRDuino_Android_App_v2"
         tools:targetApi="31">
         <activity
+            android:name=".disclaimer.disclaimerPage"
+            android:exported="false">
+        </activity>
+        <activity
             android:name=".participant_manager.ParticipantForm"
             android:exported="false" />
         <activity
@@ -45,28 +49,31 @@
         <activity
             android:name=".snirf_convert_files.SNIRFConverter"
             android:exported="false" />
-        <activity android:name=".device_communication.StreamfNIRSData"
-            android:exported="false"/>
+        <activity
+            android:name=".device_communication.StreamfNIRSData"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.NIRDuino_Android_App_v2">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
+
         <activity android:name=".layout_studio_files.LayoutStudio" />
 
         <service
             android:name=".device_communication_management.BLEConnectionManager"
             android:exported="false"
             android:foregroundServiceType="connectedDevice"
-            tools:targetApi="29"
-            tools:ignore="ForegroundServicePermission" />
-
+            tools:ignore="ForegroundServicePermission"
+            tools:targetApi="29" />
     </application>
 
 </manifest>

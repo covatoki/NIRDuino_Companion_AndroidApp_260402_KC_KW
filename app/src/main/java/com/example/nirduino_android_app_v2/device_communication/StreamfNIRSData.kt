@@ -23,6 +23,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.get
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.example.nirduino_android_app_v2.R
 import com.example.nirduino_android_app_v2.device_communication_management.BLEConnectionManager
@@ -216,6 +217,11 @@ class StreamfNIRSData : AppCompatActivity() {
                 isStreaming = false
 
             }
+
+            // Disable addition/removal of any stimulus
+            addStimulusButton.isEnabled = false;
+            addStimulusButton.isVisible = false;
+            
         }
 
         streamToggleButton.setOnClickListener {
