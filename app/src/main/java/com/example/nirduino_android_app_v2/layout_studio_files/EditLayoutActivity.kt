@@ -32,17 +32,13 @@ class EditLayoutActivity : AppCompatActivity() {
         mmLabel = findViewById(R.id.mmLabel)
 
         val layoutItemJson = intent.getStringExtra("layoutItemJson")
-        val layoutItem = layoutItemJson?.let {
-            Gson().fromJson(it, LayoutStudioItem::class.java)
-        }
+        val layoutItem = layoutItemJson?.let { Gson().fromJson(it, LayoutStudioItem::class.java) }
 
         val loadFromStorage = intent.getBooleanExtra("loadFromStorage", false)
-
         val layoutStore = LayoutDataStore.getInstance(applicationContext)
 
         if (loadFromStorage && layoutItem != null) {
             lifecycleScope.launch {
-
                 val saved = try {
                     layoutStore.loadOverlayElements(layoutItem.layoutName)
                 } catch (e: Exception) {
@@ -52,9 +48,10 @@ class EditLayoutActivity : AppCompatActivity() {
 
                 if (saved.isEmpty()) {
                     Toast.makeText(applicationContext, "New canvas created", Toast.LENGTH_LONG).show()
-                    Log.e("EditLayoutActivity","This layout no longer exists or has been deleted.")
+                    Log.w("EditLayoutActivity","No overlays saved for ${layoutItem.layoutName}")
                 }
 
+                // Only keep elements that are still part of this layout selection
                 val currentSources = layoutItem.selectedSources.toSet()
                 val currentDetectors = layoutItem.selectedDetectors.toSet()
 
@@ -62,31 +59,30 @@ class EditLayoutActivity : AppCompatActivity() {
                 val existingSourceIds = mutableSetOf<Int>()
                 val existingDetectorIds = mutableSetOf<Int>()
 
-                saved.forEach {
-                    if (it.isSource && it.id in currentSources) {
-                        merged.add(it)
-                        existingSourceIds.add(it.id)
-                    } else if (!it.isSource && it.id in currentDetectors) {
-                        merged.add(it)
-                        existingDetectorIds.add(it.id)
+                saved.forEach { e ->
+                    if (e.isSource && e.id in currentSources) {
+                        merged.add(e); existingSourceIds.add(e.id)
+                    } else if (!e.isSource && e.id in currentDetectors) {
+                        merged.add(e); existingDetectorIds.add(e.id)
                     }
                 }
 
-                var x = 0f
-                var y = 0f
+                // 👉 Seed missing ones IN MILLIMETERS (storage units), NOT pixels
+                var xMm = 0f
+                var yMm = 0f
                 for (src in currentSources.sorted()) {
                     if (src !in existingSourceIds) {
-                        merged.add(OverlayElement(x, y, true, src))
-                        x += gridView.mmToPx(10f)
+                        merged.add(OverlayElement(xMm, yMm, true, src))
+                        xMm += 10f  // 10 mm step between sources
                     }
                 }
 
-                x = 0f
-                y = gridView.mmToPx(20f)
+                xMm = 0f
+                yMm = 20f  // place detectors 20 mm below sources
                 for (det in currentDetectors.sorted()) {
                     if (det !in existingDetectorIds) {
-                        merged.add(OverlayElement(x, y, false, det))
-                        x += gridView.mmToPx(10f)
+                        merged.add(OverlayElement(xMm, yMm, false, det))
+                        xMm += 10f  // 10 mm step between detectors
                     }
                 }
 
@@ -96,39 +92,62 @@ class EditLayoutActivity : AppCompatActivity() {
             gridView.loadFromLayoutItem(layoutItem)
         }
 
-        zoomInButton.setOnClickListener {
-            gridView.zoomIn()
-            updateMmLabel()
-        }
-
-        zoomOutButton.setOnClickListener {
-            gridView.zoomOut()
-            updateMmLabel()
-        }
-
-        recenterButton.setOnClickListener {
-            gridView.recenterOnItems()
-        }
+        zoomInButton.setOnClickListener { gridView.zoomIn();  updateMmLabel() }
+        zoomOutButton.setOnClickListener { gridView.zoomOut(); updateMmLabel() }
+        recenterButton.setOnClickListener { gridView.recenterOnItems() }
 
         saveButton.setOnClickListener {
-            val elements = gridView.getOverlayElements()
+            val li = layoutItem ?: run {
+                Toast.makeText(this, "Layout not loaded", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // 1) Snapshot positions from the view (in mm, storage space per your view’s contract)
+            val elementsFromView = gridView.getOverlayElements().map { it.copy() }
+
+            // --- Optional: UNFLIP Y back to a top-left origin if your view was flipped on load/set ---
+            // Comment this whole block out if you intentionally want the mirrored Y.
+            if (elementsFromView.isNotEmpty()) {
+                val maxYmm = elementsFromView.maxOf { it.y }
+                elementsFromView.forEach { e -> e.y = maxYmm - e.y }
+            }
+            // -----------------------------------------------------------------------------------------
+
+            // 2) Round to 0.1 mm for stable storage (avoid tiny float noise)
+            val elementsForStorage = elementsFromView.map { e ->
+                e.copy(
+                    x = kotlin.math.round(e.x * 10f) / 10f,
+                    y = kotlin.math.round(e.y * 10f) / 10f
+                )
+            }
+
+            // Debug logs so you can verify what’s being saved
+            Log.d("EditLayoutActivity", "Saving ${elementsForStorage.size} overlay elements:")
+            elementsForStorage.forEach {
+                Log.d("EditLayoutActivity", "  id=${it.id} src=${it.isSource}  x(mm)=${it.x}  y(mm)=${it.y}")
+            }
 
             lifecycleScope.launch {
-                layoutStore.saveOverlayElements(layoutItem!!.layoutId, elements)
-                val allLayouts = layoutStore.loadLayoutItems().toMutableList()
+                try {
+                    // Save only THIS layout's overlays (keyed by layoutName)
+                    layoutStore.saveOverlayElements(li.layoutName, elementsForStorage)
 
-                val index = allLayouts.indexOfFirst { it.layoutId == layoutItem.layoutId }
-                if (index != -1) {
-                    allLayouts[index].lastUpdated = System.currentTimeMillis()
-                    layoutStore.saveLayoutItems(allLayouts)
-
-                    Log.d("EditLayoutActivity", "Layout updated: ${layoutItem.layoutId}")
-                    Toast.makeText(applicationContext, "Layout data saved!", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(applicationContext, "Layout not found!", Toast.LENGTH_SHORT).show()
+                    // Update lastUpdated in the layouts list (by name)
+                    val allLayouts = layoutStore.loadLayoutItems().toMutableList()
+                    val index = allLayouts.indexOfFirst { it.layoutName == li.layoutName }
+                    if (index != -1) {
+                        allLayouts[index].lastUpdated = System.currentTimeMillis()
+                        layoutStore.saveLayoutItems(allLayouts)
+                        Log.d("EditLayoutActivity", "Layout updated: ${li.layoutName}")
+                        Toast.makeText(applicationContext, "Layout data saved!", Toast.LENGTH_SHORT).show()
+                        finish()
+                    } else {
+                        Toast.makeText(applicationContext, "Layout not found!", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Log.e("EditLayoutActivity", "Save failed: ${e.message}", e)
+                    Toast.makeText(applicationContext, "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
                 }
-
-                finish()
             }
         }
 
