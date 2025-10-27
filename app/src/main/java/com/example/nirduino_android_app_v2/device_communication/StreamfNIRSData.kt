@@ -581,15 +581,15 @@ class StreamfNIRSData : AppCompatActivity() {
         val primaryColor = ContextCompat.getColor(this, R.color.colorPrimaryValue) // your primary
 
         when {
-            rssiLevel >= -50 -> { // excellent signal
+            rssiLevel >= -60 -> { // excellent signal
                 signalQualityIndicator?.setImageResource(R.drawable.signal_maximum)
                 signalQualityIndicator?.setColorFilter(primaryColor)
             }
-            rssiLevel >= -60 -> { // good
+            rssiLevel >= -70 -> { // good
                 signalQualityIndicator?.setImageResource(R.drawable.signal_level3)
                 signalQualityIndicator?.setColorFilter(primaryColor)
             }
-            rssiLevel >= -70 -> { // fair
+            rssiLevel >= -80 -> { // fair
                 signalQualityIndicator?.setImageResource(R.drawable.signal_level2)
                 signalQualityIndicator?.setColorFilter(accentColor)
             }
