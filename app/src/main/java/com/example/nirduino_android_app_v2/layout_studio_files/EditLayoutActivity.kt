@@ -114,15 +114,15 @@ class EditLayoutActivity : AppCompatActivity() {
             val elements = gridView.getOverlayElements()
 
             lifecycleScope.launch {
-                layoutStore.saveOverlayElements(layoutItem!!.layoutName, elements)
+                layoutStore.saveOverlayElements(layoutItem!!.layoutId, elements)
                 val allLayouts = layoutStore.loadLayoutItems().toMutableList()
 
-                val index = allLayouts.indexOfFirst { it.layoutName == layoutItem.layoutName }
+                val index = allLayouts.indexOfFirst { it.layoutId == layoutItem.layoutId }
                 if (index != -1) {
                     allLayouts[index].lastUpdated = System.currentTimeMillis()
                     layoutStore.saveLayoutItems(allLayouts)
 
-                    Log.d("EditLayoutActivity", "Layout updated: ${layoutItem.layoutName}")
+                    Log.d("EditLayoutActivity", "Layout updated: ${layoutItem.layoutId}")
                     Toast.makeText(applicationContext, "Layout data saved!", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(applicationContext, "Layout not found!", Toast.LENGTH_SHORT).show()
