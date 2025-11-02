@@ -32,43 +32,14 @@ class BleDeviceConnection(
     private val expectedChunkSizes = listOf(480, 480, 480, 480, 344, 4)
     private val expectedTotalBytes = expectedChunkSizes.sum()
 
-    private var areLEDIntensitiesAdjusted = false
-
     private val receivedBuffers = mutableListOf<ByteArray>()
     private val fullDataBuffer = ByteArray(expectedTotalBytes)
     private var totalBytesWritten = 0
+    var ledIntensityValues = IntArray(33) { 8 }
 
     val dataProcessor = DataParsingAndProcessing()
     var connectionRSSI = 0
     var deviceBatteryLevel = 0
-
-    val possibleLEDValues = intArrayOf(
-        105, 115, 125, 135, 145, 155, 165, 175, 185, 195, 205, 215, 225, 235, 245
-    )
-
-    var ledIntensityValues = intArrayOf(
-        1,
-        255, 125, 255, 125,
-        255, 125, 255, 125,
-        255, 125, 255, 125,
-        255, 125, 255, 125, // regular power
-        80, 78, 80, 78,
-        80, 78, 80, 78,
-        80, 78, 80, 78,
-        80, 78, 80, 78
-    )
-
-    var selectedLEDIntensities = intArrayOf(
-        1,
-        255, 125, 255, 125,
-        255, 125, 255, 125,
-        255, 125, 255, 125,
-        255, 125, 255, 125, // regular power
-        80, 78, 80, 78,
-        80, 78, 80, 78,
-        80, 78, 80, 78,
-        80, 78, 80, 78
-    )
 
     companion object {
         val FNIRS_SERVICE_UUID: UUID = UUID.fromString("938548e6-c655-11ea-87d0-0242ac130003")
@@ -84,7 +55,9 @@ class BleDeviceConnection(
     fun isConnected(): Boolean = bluetoothGatt != null
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    fun startStreamNIRDuinoData() {
+    fun streamNIRDuinoData(ledIntensityValues: IntArray) {
+        resetTimeStamps()
+        this.ledIntensityValues = ledIntensityValues
 
         val service = bluetoothGatt?.getService(FNIRS_SERVICE_UUID)
         val characteristic = service?.getCharacteristic(LED_CHARACTERISTIC_UUID)
@@ -92,17 +65,6 @@ class BleDeviceConnection(
             Log.e("BleDeviceConnection", "LED characteristic not found.")
             return
         }
-
-        if (areLEDIntensitiesAdjusted){
-            ledIntensityValues = selectedLEDIntensities
-        }
-        else{
-            ledIntensityValues = getCurrentLEDTestLevel()
-        }
-
-        resetTimeStamps()
-
-
         val value = hexStringToByteArray(getCommandString(this.ledIntensityValues))
         val success = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             bluetoothGatt?.writeCharacteristic(
@@ -119,22 +81,6 @@ class BleDeviceConnection(
         dataProcessor.beginSessionLogging(context, alias, BLEConnectionManager.selectedLayoutName)
         dataProcessor.startNewDataRound(this.ledIntensityValues)
         Log.d("BleDeviceConnection", "Sent START stream command to $alias, success: $success")
-
-    }
-
-    fun getCurrentLEDTestLevel(): IntArray{
-
-        return intArrayOf(
-            1,
-            255, 125, 255, 125,
-            255, 125, 255, 125,
-            255, 125, 255, 125,
-            255, 125, 255, 125, // regular power
-            80, 78, 80, 78,
-            80, 78, 80, 78,
-            80, 78, 80, 78,
-            80, 78, 80, 78
-        )
 
     }
 

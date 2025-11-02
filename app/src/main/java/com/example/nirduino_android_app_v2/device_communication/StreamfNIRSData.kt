@@ -83,6 +83,20 @@ class StreamfNIRSData : AppCompatActivity() {
 
     var fNIRSData:List<DataRound> = emptyList()
 
+    var ledIntensityValues: IntArray  // low power
+        get() = intArrayOf(
+            1,
+            255, 125, 255, 125,
+            255, 125, 255, 125,
+            255, 125, 255, 125,
+            255, 125, 255, 125, // regular power
+            80, 78, 80, 78,
+            80, 78, 80, 78,
+            80, 78, 80, 78,
+            80, 78, 80, 78
+        )
+        set(value) = TODO()
+
     // Dark, white-text-friendly, and distinct from your red/black plot lines
     private val STIM_COLORS = intArrayOf(
         Color.parseColor("#0066A8"), // deep blue
@@ -229,7 +243,7 @@ class StreamfNIRSData : AppCompatActivity() {
                 stopPollingServiceData()
             } else {
                 selectedLayoutName?.let { it1 ->
-                    BLEConnectionManager.startStreamFromDevice(
+                    BLEConnectionManager.startStreamFromDevice(ledIntensityValues,
                         it1
                     )
                 }

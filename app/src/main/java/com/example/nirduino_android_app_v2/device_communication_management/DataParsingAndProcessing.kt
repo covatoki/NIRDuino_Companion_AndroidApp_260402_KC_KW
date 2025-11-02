@@ -389,7 +389,7 @@ class DataParsingAndProcessing {
         val sqiScores = MutableList(numChannels) { 1f }
 
         // Allowed raw input voltage range BEFORE bias removal
-        val minAllowed = 0.4
+        val minAllowed = 1.40
         val maxAllowed = 4.80
 
         for (ch in 0 until numChannels) {

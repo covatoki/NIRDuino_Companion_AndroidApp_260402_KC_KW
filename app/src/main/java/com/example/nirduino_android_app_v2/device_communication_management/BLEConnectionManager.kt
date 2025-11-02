@@ -47,8 +47,8 @@ class BLEConnectionManager : Service() {
     fun getStreamReadinessStatus(): Boolean = configurationReadyToStream
 
     @SuppressLint("MissingPermission")
-    fun startStreamFromDevice() {
-        connection?.startStreamNIRDuinoData()
+    fun startStreamFromDevice(ledIntensityValues: IntArray) {
+        connection?.streamNIRDuinoData(ledIntensityValues)
     }
 
     @SuppressLint("MissingPermission")
@@ -336,9 +336,9 @@ class BLEConnectionManager : Service() {
         fun getStreamReadinessStatus(): Boolean =
             connectionManagerInstance?.getStreamReadinessStatus() ?: false
 
-        fun startStreamFromDevice(layoutName: String) {
+        fun startStreamFromDevice(ledIntensityValues: IntArray, layoutName: String) {
             selectedLayoutName = layoutName
-            connectionManagerInstance?.startStreamFromDevice()
+            connectionManagerInstance?.startStreamFromDevice(ledIntensityValues)
         }
 
         fun getDeviceBatteryLevel() {

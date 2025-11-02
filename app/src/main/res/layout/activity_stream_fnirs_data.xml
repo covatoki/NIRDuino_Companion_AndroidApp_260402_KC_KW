@@ -143,7 +143,7 @@
         android:layout_marginTop="16dp"
         android:background="#220000FF"
         app:layout_constraintTop_toBottomOf="@id/btn_stream_toggle"
-    />
+ />
 
     <!-- Spinner row with label -->
     <LinearLayout
@@ -173,78 +173,13 @@
 
     </LinearLayout>
 
-
-    <LinearLayout
-        android:id="@+id/seekbarLayout"
-        app:layout_constraintTop_toBottomOf="@id/channel_spinner_row"
-        android:layout_marginTop="@dimen/font_size_paragraph"
-        android:layout_marginBottom="@dimen/font_size_paragraph"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:weightSum="2">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <TextView
-                android:text="Red LED Intensity"
-                android:textSize="@dimen/font_size_paragraph"
-                android:textStyle="bold|italic"
-                android:textColor="@android:color/holo_red_dark"
-                android:layout_height="wrap_content"
-                android:layout_width="wrap_content"/>
-
-            <SeekBar
-                android:id="@+id/seekbar_Red"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:progressTint="@android:color/holo_red_dark"
-                android:thumbTint = "@android:color/holo_red_dark"
-                android:min="105"
-                android:max="255" />
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <TextView
-                android:text="IR Intensity"
-                android:textSize="14sp"
-                android:textStyle="bold|italic"
-                android:layout_marginBottom="4dp"
-                android:textColor="@android:color/black"
-                android:layout_height="wrap_content"
-                android:layout_width="wrap_content"/>
-
-            <SeekBar
-                android:id="@+id/seekbar_IR"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:progressTint="@android:color/black"
-                android:thumbTint="@android:color/black"
-                android:min="105"
-                android:max="255" />
-
-        </LinearLayout>
-    </LinearLayout>
-
     <!-- Placeholder for real-time plot -->
     <com.example.nirduino_android_app_v2.device_communication.ChannelPlotView
         android:id="@+id/channel_plot_view"
         android:layout_width="match_parent"
         android:layout_height="300dp"
         android:background="@color/white"
-        app:layout_constraintTop_toBottomOf="@id/seekbarLayout"
+        app:layout_constraintTop_toBottomOf="@id/channel_spinner_row"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
@@ -252,9 +187,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Meta-data:"
-        app:layout_constraintTop_toBottomOf="@id/channel_plot_view"
         app:layout_constraintBottom_toTopOf="@id/stimulus_bar"
-        android:textSize="@dimen/font_size_header3"/>
+        android:textSize="@dimen/font_size_header2"/>
 
     <LinearLayout
         android:id="@+id/stimulus_bar"
@@ -262,12 +196,13 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp"
-        android:layout_marginTop="6dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:layout_marginTop="24dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        android:background="@color/white"
         android:baselineAligned="false"
         android:scrollbars="horizontal">
 
@@ -290,7 +225,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text= "Notes:"
-                android:textSize="@dimen/font_size_paragraph"/>
+                android:textSize="@dimen/font_size_header3"/>
 
             <EditText
                 android:id="@+id/notebox"
