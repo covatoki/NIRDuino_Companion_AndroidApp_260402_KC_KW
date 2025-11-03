@@ -121,7 +121,10 @@ class DataParsingAndProcessing {
             }
             344 -> {
                 transferToReceivedDataArray(1904, wrap)
+
+                // Assign bytes to large data array
                 generateDataArray()
+
                 durationDataRoundSeconds = durationDataRound / 1000.0f
                 durationDataRound = 0
                 isDataReady = isDataSet1Ready && isDataSet2Ready && isDataSet3Ready && isDataSet4Ready

@@ -1,5 +1,6 @@
 package com.example.nirduino_android_app_v2.device_communication
 
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
@@ -74,6 +75,7 @@ class StreamfNIRSData : AppCompatActivity() {
     private var batteryLevelIndicator: ImageView? = null
 
     private lateinit var experimentalNotes: EditText
+    private lateinit var autosetLEDs: Button
 
     data class StimulusLabel(
         val label: String,
@@ -86,10 +88,10 @@ class StreamfNIRSData : AppCompatActivity() {
     var ledIntensityValues: IntArray  // low power
         get() = intArrayOf(
             1,
-            255, 125, 255, 125,
-            255, 125, 255, 125,
-            255, 125, 255, 125,
-            255, 125, 255, 125, // regular power
+            255, 255, 255, 255,
+            255, 255, 255, 255,
+            255, 255, 255, 255,
+            255, 255, 255, 255, // regular power
             80, 78, 80, 78,
             80, 78, 80, 78,
             80, 78, 80, 78,
@@ -150,6 +152,7 @@ class StreamfNIRSData : AppCompatActivity() {
     // When the user switches channels, we already clear buffers in onItemSelected;
     // keep that behavior.
 
+    @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_stream_fnirs_data)
@@ -176,6 +179,8 @@ class StreamfNIRSData : AppCompatActivity() {
         onScreenTimer = findViewById(R.id.text_timer)
 
         experimentalNotes =  findViewById(R.id.notebox)
+
+        autosetLEDs = findViewById(R.id.autoSet)
 
         lifecycleScope.launch {
 
@@ -253,6 +258,12 @@ class StreamfNIRSData : AppCompatActivity() {
 
                 startPollingServiceData()
             }
+
+        }
+
+        autosetLEDs.setOnClickListener {
+
+            BLEConnectionManager.requestAutomaticLEDAdjustment()
 
         }
 

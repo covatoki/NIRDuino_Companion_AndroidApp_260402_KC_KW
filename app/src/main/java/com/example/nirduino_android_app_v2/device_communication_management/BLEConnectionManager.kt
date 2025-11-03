@@ -380,5 +380,10 @@ class BLEConnectionManager : Service() {
 
         fun readLatestBatteryLevel(): Int =
             connectionManagerInstance?.connection?.deviceBatteryLevel ?: 0
+
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+        fun requestAutomaticLEDAdjustment(){
+            connectionManagerInstance?.connection?.requestAutosetLEDs()
+        }
     }
 }

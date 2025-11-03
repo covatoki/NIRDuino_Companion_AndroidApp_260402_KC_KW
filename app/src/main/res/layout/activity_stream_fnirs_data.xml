@@ -173,15 +173,80 @@
 
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/seekbar_row"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@id/channel_spinner_row"
+        android:weightSum="3"
+        android:layout_marginTop="@dimen/font_size_paragraph">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_weight="1">
+
+            <TextView
+                android:text="740nm LED"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAlignment="center"/>
+
+            <SeekBar
+                android:id="@+id/seekbar_red"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:min="0"
+                android:max="10"
+                android:thumbTint="@color/red_accessible"/>
+
+        </LinearLayout>
+
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_weight="1">
+
+            <TextView
+                android:text="860nm LED"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAlignment="center"/>
+
+            <SeekBar
+                android:id="@+id/seekbar_IR"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:min="0"
+                android:max="10"
+                android:thumbTint="@color/black"/>
+
+        </LinearLayout>
+
+        <Button
+            app:layout_constraintTop_toBottomOf="@id/channel_spinner_row"
+            android:text="Try autoset"
+            android:id="@+id/autoSet"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"/>
+
+    </LinearLayout>
+
     <!-- Placeholder for real-time plot -->
     <com.example.nirduino_android_app_v2.device_communication.ChannelPlotView
         android:id="@+id/channel_plot_view"
         android:layout_width="match_parent"
         android:layout_height="300dp"
         android:background="@color/white"
-        app:layout_constraintTop_toBottomOf="@id/channel_spinner_row"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/seekbar_row"/>
+
 
     <TextView
         android:layout_width="match_parent"
