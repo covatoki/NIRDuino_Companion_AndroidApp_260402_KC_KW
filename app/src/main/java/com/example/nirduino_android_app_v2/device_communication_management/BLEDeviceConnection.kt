@@ -13,6 +13,7 @@ import androidx.annotation.RequiresPermission
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
+import com.example.nirduino_android_app_v2.device_communication_management.ChannelType
 
 class BleDeviceConnection(
     private val context: Context,
@@ -118,7 +119,7 @@ class BleDeviceConnection(
 
     @SuppressLint("NewApi")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    fun requestAutosetLEDs(){
+    fun requestAutosetLEDs(channelCoords : List<DisplayChannelData>){
 
         val service = bluetoothGatt?.getService(FNIRS_SERVICE_UUID)
         val characteristic = service?.getCharacteristic(LED_CHARACTERISTIC_UUID)
@@ -128,87 +129,9 @@ class BleDeviceConnection(
         }
 
         // Generate dummy request
+        var sourceDetectorLayoutInformation = buildLedDetectorArray(channelCoords)
 
-        var sourceDetectorLayoutInformation: IntArray = intArrayOf(
-            23,
-            240,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-            0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 2, 3,
-
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5,
-            1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5
-        )
-
-//
-//        var sourceDetectorLayoutInformation: IntArray = intArrayOf(
-//            23, 256, // header: [commandCode, numberOfRelationships]
-//
-//            // 256 LED indices (0–31 repeating)
-//            0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-//            0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-//            0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-//            0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-//            0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-//            0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-//            0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-//            0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-//
-//            // 256 Detector indices (1–16 repeating)
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-//            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
-//        )
-
-
+        //
         val value = hexStringToByteArray(getCommandString(sourceDetectorLayoutInformation))
 
         bluetoothGatt?.writeCharacteristic(
@@ -216,6 +139,42 @@ class BleDeviceConnection(
         )
 
     }
+
+
+    fun buildLedDetectorArray(channels: List<DisplayChannelData>): IntArray {
+        val ledList = ArrayList<Int>(channels.size * 2)
+        val detList = ArrayList<Int>(channels.size * 2)
+
+        for (ch in channels) {
+            require(ch.sourceId in 1..8) { "sourceId ${ch.sourceId} out of range 1..8" }
+            require(ch.detectorId in 1..16) { "detectorId ${ch.detectorId} out of range 1..16" }
+
+            val base = when (ch.type) {
+                ChannelType.LONG -> 0    // LONG LED indices: 0..15
+                ChannelType.SHORT -> 16  // SHORT LED indices: 16..31
+            }
+
+            val sourceZeroBased = ch.sourceId - 1
+            val red = base + sourceZeroBased * 2      // RED LED index
+            val ir  = red + 1                         // IR LED index
+
+            // Add two pairs per channel (RED, det) and (IR, det)
+            ledList += red
+            detList += ch.detectorId
+            ledList += ir
+            detList += ch.detectorId
+        }
+
+        val n = ledList.size // total LED–detector pairs (2 per channel)
+        return IntArray(2 + n + n).apply {
+            this[0] = 23
+            this[1] = n
+            var i = 2
+            for (v in ledList) this[i++] = v
+            for (v in detList) this[i++] = v
+        }
+    }
+
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun requestDeviceForBatteryLevel() {

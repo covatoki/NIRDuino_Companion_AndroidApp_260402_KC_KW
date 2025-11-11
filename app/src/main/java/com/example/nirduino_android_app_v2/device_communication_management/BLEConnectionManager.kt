@@ -382,8 +382,8 @@ class BLEConnectionManager : Service() {
             connectionManagerInstance?.connection?.deviceBatteryLevel ?: 0
 
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-        fun requestAutomaticLEDAdjustment(){
-            connectionManagerInstance?.connection?.requestAutosetLEDs()
+        fun requestAutomaticLEDAdjustment(channelCoords : List<DisplayChannelData>){
+            connectionManagerInstance?.connection?.requestAutosetLEDs(channelCoords)
         }
     }
 }

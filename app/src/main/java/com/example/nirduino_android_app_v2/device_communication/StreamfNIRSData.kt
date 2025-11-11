@@ -263,7 +263,7 @@ class StreamfNIRSData : AppCompatActivity() {
 
         autosetLEDs.setOnClickListener {
 
-            BLEConnectionManager.requestAutomaticLEDAdjustment()
+            BLEConnectionManager.requestAutomaticLEDAdjustment(channelCoords)
 
         }
 
