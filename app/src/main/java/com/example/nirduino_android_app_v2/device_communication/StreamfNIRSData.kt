@@ -263,8 +263,25 @@ class StreamfNIRSData : AppCompatActivity() {
 
         autosetLEDs.setOnClickListener {
 
+            streamToggleButton.isEnabled = false
+            statusTextView.text = "Attempting automatic LED adjustment..."
+
             BLEConnectionManager.requestAutomaticLEDAdjustment(channelCoords)
 
+            // Start polling
+            lifecycleScope.launch {
+                while (true) {
+                    val done = BLEConnectionManager.checkIfLEDsAdjusted()
+                    if (done == true) {
+
+                        streamToggleButton.isEnabled = true
+                        statusTextView.text = "Ready to stream!"
+
+                        break
+                    }
+                    delay(1) // poll every 0.5 seconds
+                }
+            }
         }
 
     }

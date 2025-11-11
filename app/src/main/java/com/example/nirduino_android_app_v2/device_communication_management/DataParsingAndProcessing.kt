@@ -68,6 +68,8 @@ class DataParsingAndProcessing {
 
     var sessionNotes: String = "";
 
+    var ledsAutoAdjusted: Boolean = false
+
     fun getHeader(): String {
         val header = StringBuilder()
         header.append("Time,Stimulus")
@@ -150,6 +152,10 @@ class DataParsingAndProcessing {
             4 ->{
                 Log.e("BATTERY_CONNECT",  "Battery level information: " + (wrap.getInt(0)).toString())
                 batteryLevel = wrap.getInt(0)
+            }
+            32 ->{
+                Log.e("LED_INTENSITIES_RECEIVED", "Autoset LED intensities received!")
+                ledsAutoAdjusted = true
             }
             else -> return false
         }

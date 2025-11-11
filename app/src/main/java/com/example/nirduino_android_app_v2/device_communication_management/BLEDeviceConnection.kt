@@ -131,7 +131,7 @@ class BleDeviceConnection(
         // Generate dummy request
         var sourceDetectorLayoutInformation = buildLedDetectorArray(channelCoords)
 
-        //
+        // Send data over to firmware
         val value = hexStringToByteArray(getCommandString(sourceDetectorLayoutInformation))
 
         bluetoothGatt?.writeCharacteristic(
@@ -139,7 +139,6 @@ class BleDeviceConnection(
         )
 
     }
-
 
     fun buildLedDetectorArray(channels: List<DisplayChannelData>): IntArray {
         val ledList = ArrayList<Int>(channels.size * 2)
@@ -317,7 +316,7 @@ class BleDeviceConnection(
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             val data = characteristic.value
             val size = data.size
-            if (size !in listOf(480, 480, 480, 480, 344, 4)) {
+            if (size !in listOf(480, 480, 480, 480, 344, 32, 4)) {
                 Log.w("BleDeviceConnection", "[$alias] Unexpected packet size: $size")
                 return
             }

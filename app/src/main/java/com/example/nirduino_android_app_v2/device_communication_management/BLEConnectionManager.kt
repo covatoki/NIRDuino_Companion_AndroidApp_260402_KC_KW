@@ -383,7 +383,12 @@ class BLEConnectionManager : Service() {
 
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         fun requestAutomaticLEDAdjustment(channelCoords : List<DisplayChannelData>){
+            connectionManagerInstance?.connection?.dataProcessor?.ledsAutoAdjusted = false
             connectionManagerInstance?.connection?.requestAutosetLEDs(channelCoords)
+        }
+
+        fun checkIfLEDsAdjusted(): Boolean? {
+            return connectionManagerInstance?.connection?.dataProcessor?.ledsAutoAdjusted
         }
     }
 }
