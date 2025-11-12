@@ -390,5 +390,9 @@ class BLEConnectionManager : Service() {
         fun checkIfLEDsAdjusted(): Boolean? {
             return connectionManagerInstance?.connection?.dataProcessor?.ledsAutoAdjusted
         }
+
+        fun getLatestIntensityValues(): IntArray? {
+            return connectionManagerInstance?.connection?.dataProcessor?.ledIntensityValues
+        }
     }
 }

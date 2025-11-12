@@ -154,12 +154,28 @@ class DataParsingAndProcessing {
                 batteryLevel = wrap.getInt(0)
             }
             32 ->{
-                Log.e("LED_INTENSITIES_RECEIVED", "Autoset LED intensities received!")
                 ledsAutoAdjusted = true
+                ledIntensityValues = byteBufferToIntArray(wrap)
+                Log.e("LED_INTENSITIES_RECEIVED", "Autoset LED intensities received!")
             }
             else -> return false
         }
         return isDataReady
+    }
+
+    fun byteBufferToIntArray(wrap: ByteBuffer): IntArray {
+        val duplicate = wrap.duplicate() // avoids moving original buffer position
+        val bytes = ByteArray(duplicate.remaining())
+        duplicate.get(bytes)
+
+        val result = IntArray(bytes.size + 1)
+        result[0] = 1 // first element
+
+        for (i in bytes.indices) {
+            result[i + 1] = bytes[i].toInt() and 0xFF
+        }
+
+        return result
     }
 
     fun handleStimulusEvent(event: StimulusEvent) {

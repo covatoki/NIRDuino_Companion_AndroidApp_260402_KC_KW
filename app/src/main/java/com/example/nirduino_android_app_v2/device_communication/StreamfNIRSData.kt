@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
-import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -17,13 +16,13 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.get
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.example.nirduino_android_app_v2.R
@@ -31,7 +30,6 @@ import com.example.nirduino_android_app_v2.device_communication_management.BLECo
 import com.example.nirduino_android_app_v2.device_communication_management.ChannelType
 import com.example.nirduino_android_app_v2.device_communication_management.DataRound
 import com.example.nirduino_android_app_v2.device_communication_management.DisplayChannelData
-import com.example.nirduino_android_app_v2.device_communication_management.DisplayDataFormatter
 import com.example.nirduino_android_app_v2.device_communication_management.StimulusEvent
 import com.example.nirduino_android_app_v2.device_manager_files.KnownDeviceDataStore
 import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
@@ -45,7 +43,6 @@ import kotlinx.coroutines.launch
 import java.io.File
 import kotlinx.coroutines.isActive
 import com.google.android.material.button.MaterialButton
-import kotlin.math.exp
 
 class StreamfNIRSData : AppCompatActivity() {
 
@@ -54,7 +51,7 @@ class StreamfNIRSData : AppCompatActivity() {
     private lateinit var statusTextView: TextView
     private lateinit var connectButton: Button
 
-    private lateinit var onScreenTimer : TextView
+    private lateinit var onScreenTimer: TextView
 
     private lateinit var knownDeviceStore: KnownDeviceDataStore
     private lateinit var layoutDataStore: LayoutDataStore
@@ -83,21 +80,19 @@ class StreamfNIRSData : AppCompatActivity() {
         var onsetTime: Float = 0f
     )
 
-    var fNIRSData:List<DataRound> = emptyList()
+    var fNIRSData: List<DataRound> = emptyList()
 
-    var ledIntensityValues: IntArray  // low power
-        get() = intArrayOf(
-            1,
-            255, 255, 255, 255,
-            255, 255, 255, 255,
-            255, 255, 255, 255,
-            255, 255, 255, 255, // regular power
-            80, 78, 80, 78,
-            80, 78, 80, 78,
-            80, 78, 80, 78,
-            80, 78, 80, 78
-        )
-        set(value) = TODO()
+    var ledIntensityValues = intArrayOf(
+        1,
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+        255, 255, 255, 255, // regular power
+        80, 78, 80, 78,
+        80, 78, 80, 78,
+        80, 78, 80, 78,
+        80, 78, 80, 78
+    )
 
     // Dark, white-text-friendly, and distinct from your red/black plot lines
     private val STIM_COLORS = intArrayOf(
@@ -131,8 +126,6 @@ class StreamfNIRSData : AppCompatActivity() {
     var detectors : List<OverlayElement> = emptyList()
     var channelCoords : List<DisplayChannelData> = emptyList()
 
-    enum class ChannelType { LONG, SHORT }
-
     var layoutMap: Map<String, LayoutStudioItem> = emptyMap()
     var layoutNames: List<String> = emptyList()
 
@@ -148,6 +141,8 @@ class StreamfNIRSData : AppCompatActivity() {
     private val stimIndexMap = linkedMapOf<String, Int>()
     private var nextStimIndex = 0
 
+    private lateinit var redSeekbar: SeekBar
+    private lateinit var irSeekbar: SeekBar
 
     // When the user switches channels, we already clear buffers in onItemSelected;
     // keep that behavior.
@@ -181,6 +176,15 @@ class StreamfNIRSData : AppCompatActivity() {
         experimentalNotes =  findViewById(R.id.notebox)
 
         autosetLEDs = findViewById(R.id.autoSet)
+
+        redSeekbar = findViewById(R.id.seekbar_red)
+        irSeekbar = findViewById(R.id.seekbar_IR)
+        redSeekbar.min = 0
+        redSeekbar.max = 16
+        irSeekbar.min = 0
+        irSeekbar.max = 16
+        redSeekbar.isEnabled = false
+        irSeekbar.isEnabled = false
 
         lifecycleScope.launch {
 
@@ -263,6 +267,7 @@ class StreamfNIRSData : AppCompatActivity() {
 
         autosetLEDs.setOnClickListener {
 
+            autosetLEDs.isEnabled = false
             streamToggleButton.isEnabled = false
             statusTextView.text = "Attempting automatic LED adjustment..."
 
@@ -273,17 +278,176 @@ class StreamfNIRSData : AppCompatActivity() {
                 while (true) {
                     val done = BLEConnectionManager.checkIfLEDsAdjusted()
                     if (done == true) {
-
+                        autosetLEDs.isEnabled = false
                         streamToggleButton.isEnabled = true
                         statusTextView.text = "Ready to stream!"
+
+                        updateSeekbarsForSelectedChannel()
 
                         break
                     }
                     delay(1) // poll every 0.5 seconds
                 }
+                ledIntensityValues = BLEConnectionManager.getLatestIntensityValues()!!
+                Log.e("StreamfNIRSData", ledIntensityValues.toString())
             }
         }
 
+        redSeekbar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    // Called when the user moves the seekbar
+                    Log.d("SeekBar", "Red intensity: $progress")
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                // Optional: do something when user starts touching
+                Log.d("SeekBar", "Started adjusting Red")
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+
+                // Called when user stops touching
+                val finalValue = seekBar?.progress ?: 0
+                Log.d("SeekBar", "Final Red intensity: $finalValue")
+                // Do something with the final value here
+
+                BLEConnectionManager.stopStreamingFromDevice()
+                stopPollingServiceData()
+
+                if (channelCoords.get(channelSpinner.selectedItemPosition).type == ChannelType.LONG){
+                    ledIntensityValues[2*channelCoords.get(channelSpinner.selectedItemPosition).sourceId-1] = allowedLEDIntensities.get(finalValue)
+                }
+                else{
+                    ledIntensityValues[(2*channelCoords.get(channelSpinner.selectedItemPosition).sourceId-1) + 16] = allowedLEDIntensities.get(finalValue)
+                }
+
+
+            }
+        })
+
+        irSeekbar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    Log.d("SeekBar", "IR intensity: $progress")
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                Log.d("SeekBar", "Started adjusting IR")
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                val finalValue = seekBar?.progress ?: 0
+
+                BLEConnectionManager.stopStreamingFromDevice()
+                stopPollingServiceData()
+
+                if (channelCoords.get(channelSpinner.selectedItemPosition).type == ChannelType.LONG){
+                    ledIntensityValues[2*channelCoords.get(channelSpinner.selectedItemPosition).sourceId] = allowedLEDIntensities.get(finalValue)
+                }
+                else{
+                    ledIntensityValues[2*channelCoords.get(channelSpinner.selectedItemPosition).sourceId + 16] = allowedLEDIntensities.get(finalValue)
+                }
+
+                Log.d("SeekBar", "Final IR intensity: $finalValue")
+            }
+        })
+
+    }
+
+    // Define the allowed intensity values
+    private val allowedLEDIntensities = intArrayOf(
+        0, 105, 115, 125, 135, 145, 155,
+        165, 175, 185, 195, 205, 215, 225, 235, 245, 255
+    )
+
+    fun updateSeekbarsForSelectedChannel() {
+        val selectedIndex = channelSpinner.selectedItemPosition
+        if (selectedIndex !in channelCoords.indices) return
+        val ch = channelCoords[selectedIndex]
+
+        val allowedLEDIntensities = intArrayOf(
+            0, 105, 115, 125, 135, 145, 155,
+            165, 175, 185, 195, 205, 215, 225, 235, 245, 255
+        )
+
+        fun intensityToProgress(value: Int): Int {
+            val v = value.coerceIn(0, 255)
+            var best = 0
+            var bestDiff = Int.MAX_VALUE
+            for (i in allowedLEDIntensities.indices) {
+                val d = kotlin.math.abs(allowedLEDIntensities[i] - v)
+                if (d < bestDiff) { best = i; bestDiff = d }
+            }
+            return best
+        }
+
+        fun progressToIntensity(p: Int): Int =
+            allowedLEDIntensities[p.coerceIn(0, allowedLEDIntensities.lastIndex)]
+
+        fun redIndexFor(sourceId: Int, type: ChannelType): Int {
+            val sid = sourceId.coerceIn(1, 8)
+            return if (type == ChannelType.LONG) (2 * sid - 1) else (2 * sid - 1) + 16
+        }
+
+        fun irIndexFor(sourceId: Int, type: ChannelType): Int {
+            val sid = sourceId.coerceIn(1, 8)
+            return if (type == ChannelType.LONG) (2 * sid) else (2 * sid) + 16
+        }
+
+        // --- Initialize SeekBars ---
+        redSeekbar.max = allowedLEDIntensities.lastIndex
+        irSeekbar.max = allowedLEDIntensities.lastIndex
+
+        val rIdx = redIndexFor(ch.sourceId, ch.type)
+        val iIdx = irIndexFor(ch.sourceId, ch.type)
+
+        val redIntensity = ledIntensityValues.getOrNull(rIdx) ?: 0
+        val irIntensity  = ledIntensityValues.getOrNull(iIdx) ?: 0
+
+        redSeekbar.progress = intensityToProgress(redIntensity)
+        irSeekbar.progress  = intensityToProgress(irIntensity)
+
+        // --- Set Listeners ---
+        redSeekbar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val v = progressToIntensity(progress)
+                    Log.d("SeekBar", "Red intensity (mapped): $v")
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                Log.d("SeekBar", "Started adjusting Red")
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                val finalIntensity = progressToIntensity(seekBar?.progress ?: 0)
+                ledIntensityValues[rIdx] = finalIntensity
+                Log.d("SeekBar", "Final Red intensity stored: $finalIntensity at index $rIdx")
+            }
+        })
+
+        irSeekbar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val v = progressToIntensity(progress)
+                    Log.d("SeekBar", "IR intensity (mapped): $v")
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                Log.d("SeekBar", "Started adjusting IR")
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                val finalIntensity = progressToIntensity(seekBar?.progress ?: 0)
+                ledIntensityValues[iIdx] = finalIntensity
+                Log.d("SeekBar", "Final IR intensity stored: $finalIntensity at index $iIdx")
+            }
+        })
     }
 
     private fun showAddStimulusDialog() {
@@ -799,6 +963,9 @@ class StreamfNIRSData : AppCompatActivity() {
                     "ChannelSpinner",
                     "${currChannel.channelNumber+1} , ${currChannel.type} Source: ${currChannel.sourceId} , Detector ${currChannel.detectorId}"
                 )
+
+                updateSeekbarsForSelectedChannel()
+
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -851,6 +1018,11 @@ class StreamfNIRSData : AppCompatActivity() {
                     // Enable the button
                     streamToggleButton.isEnabled = true
                     streamToggleButton.text = "Start Streaming"
+
+                    // Enable the various on-screen features
+                    redSeekbar.isEnabled = true
+                    irSeekbar.isEnabled = true
+                    autosetLEDs.isEnabled = true
 
                     // Log to terminal
                     Log.i("StreamfNIRSData", "✅ Ready to stream data from $alias")
