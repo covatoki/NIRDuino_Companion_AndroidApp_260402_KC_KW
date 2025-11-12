@@ -252,6 +252,10 @@ class StreamfNIRSData : AppCompatActivity() {
                 stopPollingServiceData()
             } else {
                 selectedLayoutName?.let { it1 ->
+
+                    // Freeze final label order for this session before CSV header is written
+                    BLEConnectionManager.setPresetStimulusLabels(stimulusLabels.map { it.label })
+
                     BLEConnectionManager.startStreamFromDevice(ledIntensityValues,
                         it1
                     )
@@ -1023,6 +1027,8 @@ class StreamfNIRSData : AppCompatActivity() {
                     redSeekbar.isEnabled = true
                     irSeekbar.isEnabled = true
                     autosetLEDs.isEnabled = true
+
+                    BLEConnectionManager.setPresetStimulusLabels(stimulusLabels.map { it.label })
 
                     // Log to terminal
                     Log.i("StreamfNIRSData", "✅ Ready to stream data from $alias")

@@ -70,9 +70,22 @@ class DataParsingAndProcessing {
 
     var ledsAutoAdjusted: Boolean = false
 
+    // Pre-set (fixed) labels for this session. Must be provided before streaming/logging starts.
+    var presetStimulusLabels: List<String> = emptyList()
+
     fun getHeader(): String {
         val header = StringBuilder()
-        header.append("Time,Stimulus")
+        header.append("Time")
+
+        // Fixed columns for pre-set stimuli (set before logging starts)
+        if (presetStimulusLabels.isNotEmpty()) {
+            for (label in presetStimulusLabels) {
+                header.append(", ").append(label)
+            }
+        } else {
+            // Fallback to a single generic column to avoid CSV mismatch if someone forgets to set labels
+            header.append(", Stimulus")
+        }
 
         for (s in 1..8) {
             for (d in 1..16) {
@@ -260,13 +273,18 @@ class DataParsingAndProcessing {
     }
 
     fun getStimulusString(): String {
-        val r = currentRound ?: return ""
-        // Compact, readable: "0:Label@onset+duration; 1:..."
-        return r.stimuli.mapIndexed { idx, s ->
-            val onset = "%.2f".format(s.onset)
-            val dur   = "%.2f".format(s.duration)
-            "$idx:${s.label}@$onset+$dur"
-        }.joinToString("; ")
+        // If labels weren’t set, keep CSV width consistent with getHeader() fallback
+        if (presetStimulusLabels.isEmpty()) return "0"
+
+        val r = currentRound
+            ?: return presetStimulusLabels.joinToString(", ") { "0" }
+
+        fun isActive(label: String, t: Float): Int {
+            // active if onset <= t and (still ongoing) OR (t <= onset+duration)
+            return if (r.stimuli.any { it.label == label && it.onset <= t && (it.duration == 0f || t <= it.onset + it.duration) }) 1 else 0
+        }
+
+        return presetStimulusLabels.joinToString(", ") { isActive(it, timestampSeconds).toString() }
     }
 
     private fun generateDataArray() {

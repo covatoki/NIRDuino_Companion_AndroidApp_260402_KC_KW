@@ -394,5 +394,13 @@ class BLEConnectionManager : Service() {
         fun getLatestIntensityValues(): IntArray? {
             return connectionManagerInstance?.connection?.dataProcessor?.ledIntensityValues
         }
+
+        fun setPresetStimulusLabels(labels: List<String>) {
+            connectionManagerInstance
+                ?.connection
+                ?.dataProcessor
+                ?.presetStimulusLabels = labels
+        }
+
     }
 }
