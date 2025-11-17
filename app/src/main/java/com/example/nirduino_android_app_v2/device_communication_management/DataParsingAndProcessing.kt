@@ -89,12 +89,12 @@ class DataParsingAndProcessing {
 
         for (s in 1..8) {
             for (d in 1..16) {
-                header.append(", S${s}_D${d}_740nm_RP")
-                header.append(", S${s}_D${d}_850nm_RP")
-                header.append(", ledPowerLevel_740nm_RP, ledPowerLevel_850nmRP")
-                header.append(", S${s}_D${d}_740nm_LP")
-                header.append(", S${s}_D${d}_850nm_LP")
-                header.append(", ledPowerLevel_740nm_LP, ledPowerLevel_850nmLP")
+                header.append(", S${s}_D${d}_Red_RP")
+                header.append(", S${s}_D${d}_IR_RP")
+                header.append(", ledPowerLevel_Red_RP, ledPowerLevel_IR_RP")
+                header.append(", S${s}_D${d}_Red_LP")
+                header.append(", S${s}_D${d}_IR_LP")
+                header.append(", ledPowerLevel_Red_LP, ledPowerLevel_IR_LP")
             }
         }
 
