@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
             ActivitySelectorCard("Connect devices", R.drawable.ic_chip, DeviceManager::class.java),
             ActivitySelectorCard("Design layout", R.drawable.ic_activity_zone, LayoutStudio::class.java),
             ActivitySelectorCard("Stream fNIRS data", R.drawable.ic_line_plot, StreamfNIRSData::class.java),
+            ActivitySelectorCard("Run experiments", R.drawable.ic_play, StreamfNIRSData::class.java),
             ActivitySelectorCard("Convert to SNIRF", R.drawable.ic_converter, SNIRFConverter::class.java),
 //            ActivitySelectorCard("Get information", R.drawable.ic_tutorials, Tutorials::class.java)
         )
