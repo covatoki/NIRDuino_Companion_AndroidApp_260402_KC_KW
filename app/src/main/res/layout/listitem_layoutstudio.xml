@@ -39,13 +39,20 @@
                     android:textStyle="bold"
                     android:paddingEnd="8dp" />
 
-                <EditText
+                <TextView
                     android:id="@+id/editLayoutName"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:hint="Enter name"
                     android:textSize="@dimen/font_size_header2"
                     android:textStyle="italic"/>
+
+                <ImageView
+                    android:id="@+id/btnEdit"
+                    android:src="@drawable/ic_new_edit"
+                    android:layout_width="25dp"
+                    android:layout_marginStart="20dp"
+                    android:layout_height="25dp"/>
 
             </LinearLayout>
 

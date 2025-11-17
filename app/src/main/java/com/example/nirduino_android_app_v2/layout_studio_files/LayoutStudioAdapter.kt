@@ -3,14 +3,18 @@ package com.example.nirduino_android_app_v2.layout_studio_files
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
-import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.TextView
+import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import com.example.nirduino_android_app_v2.R
 import com.google.gson.Gson
@@ -33,7 +37,8 @@ class LayoutStudioAdapter(
     private val cachedOverlayMap = mutableMapOf<String, List<OverlayElement>>()
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val layoutNameEditText: EditText = view.findViewById(R.id.editLayoutName)
+        val btnEdit: ImageView = view.findViewById(R.id.btnEdit);
+        val layoutNameEditText: TextView = view.findViewById(R.id.editLayoutName)
         val deleteLayoutButton: ImageButton = view.findViewById(R.id.deleteButton)
         val updateLayoutButton: Button = view.findViewById(R.id.updateLayoutButton)
         val view2DDataButton: Button = view.findViewById(R.id.btnView2DData)
@@ -42,10 +47,22 @@ class LayoutStudioAdapter(
         val downloadLayoutDataButton: ImageButton = view.findViewById(R.id.downloadButton)
 
         val sources: List<CheckBox> = (1..8).map {
-            view.findViewById(view.resources.getIdentifier("source$it", "id", view.context.packageName))
+            view.findViewById(
+                view.resources.getIdentifier(
+                    "source$it",
+                    "id",
+                    view.context.packageName
+                )
+            )
         }
         val detectors: List<CheckBox> = (1..16).map {
-            view.findViewById(view.resources.getIdentifier("detector$it", "id", view.context.packageName))
+            view.findViewById(
+                view.resources.getIdentifier(
+                    "detector$it",
+                    "id",
+                    view.context.packageName
+                )
+            )
         }
     }
 
@@ -82,28 +99,7 @@ class LayoutStudioAdapter(
             }
         }
 
-        holder.layoutNameEditText.setText(item.layoutName)
-        holder.layoutNameEditText.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                if (s.toString() != item.layoutName) {
-                    val oldLayoutName = item.layoutName
-                    item.layoutName = s.toString()
-
-                    CoroutineScope(Dispatchers.IO).launch {
-                        layoutStore.saveLayoutItems(items)
-                        val savedOverlays = layoutStore.loadOverlayElements(oldLayoutName)
-                        layoutStore.saveOverlayElements(item.layoutName, savedOverlays)
-                    }
-
-                    val currentPosition = holder.adapterPosition
-                    if (currentPosition != RecyclerView.NO_POSITION) {
-                        onItemChangedListener.onLayoutItemUpdated(currentPosition, items[currentPosition])
-                    }
-                }
-            }
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-        })
+        holder.layoutNameEditText.text = item.layoutName
 
         holder.sources.forEachIndexed { index, checkBox ->
             checkBox.setOnCheckedChangeListener(null)
@@ -113,7 +109,10 @@ class LayoutStudioAdapter(
                 else item.selectedSources.remove(index + 1)
                 val currentPosition = holder.adapterPosition
                 if (currentPosition != RecyclerView.NO_POSITION) {
-                    onItemChangedListener.onLayoutItemUpdated(currentPosition, items[currentPosition])
+                    onItemChangedListener.onLayoutItemUpdated(
+                        currentPosition,
+                        items[currentPosition]
+                    )
                 }
             }
         }
@@ -245,27 +244,73 @@ class LayoutStudioAdapter(
                     )
 
                     val json = Gson().toJson(exportObject)
-                    val docsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
+                    val docsDir =
+                        android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
                     val targetDir = java.io.File(docsDir, "NIRDuinoCompanion/Layouts")
                     if (!targetDir.exists()) targetDir.mkdirs()
 
-                    val fileName = layout.layoutName.replace("""[^\w\s-]""".toRegex(), "_") + ".json"
+                    val fileName =
+                        layout.layoutName.replace("""[^\w\s-]""".toRegex(), "_") + ".json"
                     val outputFile = java.io.File(targetDir, fileName)
 
                     outputFile.writeText(json)
 
                     CoroutineScope(Dispatchers.Main).launch {
-                        Toast.makeText(adapterContext, "Saved to ${outputFile.absolutePath}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            adapterContext,
+                            "Saved to ${outputFile.absolutePath}",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
 
                 } catch (e: Exception) {
                     e.printStackTrace()
                     CoroutineScope(Dispatchers.Main).launch {
-                        Toast.makeText(adapterContext, "Failed to export layout", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            adapterContext,
+                            "Failed to export layout",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 }
             }
         }
+
+        holder.btnEdit.setOnClickListener {
+
+            showEditNameDialog(item.layoutName) { value, dialog ->
+
+                if (value.isNullOrEmpty()) {
+                    Toast.makeText(adapterContext, "Please enter the name", Toast.LENGTH_SHORT).show()
+                    return@showEditNameDialog
+                }
+
+                if (value == item.layoutName) {
+                    Toast.makeText(adapterContext, "Please enter a different name", Toast.LENGTH_SHORT).show()
+                    return@showEditNameDialog
+                }
+
+                // Update name
+                val oldName = item.layoutName
+                item.layoutName = value
+
+                CoroutineScope(Dispatchers.IO).launch {
+                    layoutStore.saveLayoutItems(items)
+                    val savedOverlays = layoutStore.loadOverlayElements(oldName)
+                    layoutStore.saveOverlayElements(item.layoutName, savedOverlays)
+                }
+
+                val pos = holder.adapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    onItemChangedListener.onLayoutItemUpdated(pos, items[pos])
+                }
+
+                Toast.makeText(adapterContext, "Name changed successfully", Toast.LENGTH_SHORT).show()
+                notifyDataSetChanged()
+                dialog.dismiss()
+            }
+        }
+
     }
 
     fun addItem(item: LayoutStudioItem) {
@@ -293,5 +338,39 @@ class LayoutStudioAdapter(
         items.clear()
         items.addAll(newItems)
         notifyDataSetChanged()
+    }
+
+    private fun showEditNameDialog(
+        oldName: String,
+        onResult: (String?, AlertDialog) -> Unit
+    ) {
+        val inflater = LayoutInflater.from(adapterContext)
+        val v = inflater.inflate(R.layout.dialog_edit_name, null)
+
+        val edtName = v.findViewById<EditText>(R.id.edtName)
+
+        edtName.setText(oldName)
+
+        val dialog = AlertDialog.Builder(adapterContext)
+            .setView(v)
+            .setCancelable(false)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("OK", null) // override later
+            .create()
+
+        dialog.show()
+
+        // Override default behavior (prevent auto dismiss)
+        val btnOk = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+        val btnCancel = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+
+        btnOk.setOnClickListener {
+            val newName = edtName.text.toString().trim()
+            onResult(newName, dialog)
+        }
+
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+        }
     }
 }
