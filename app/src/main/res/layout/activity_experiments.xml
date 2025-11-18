@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/experimentLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="24dp">
+
+        <!-- ── Device and Layout Stacked Group ── -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/group_device_layout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            app:layout_constraintEnd_toStartOf="@id/btn_connect"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- Device Row -->
+            <TextView
+                android:id="@+id/label_select_device"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Select device:"
+                android:textSize="@dimen/font_size_header2"
+                app:layout_constraintBaseline_toBaselineOf="@id/spinner_aliases"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <Spinner
+                android:id="@+id/spinner_aliases"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:spinnerMode="dropdown"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/label_select_device"
+                app:layout_constraintTop_toTopOf="@id/label_select_device" />
+
+            <!-- Layout Row -->
+            <TextView
+                android:id="@+id/label_select_layout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/font_size_header2"
+                android:layout_marginEnd="8dp"
+                android:text="Select layout:"
+                android:textSize="@dimen/font_size_header2"
+                app:layout_constraintBaseline_toBaselineOf="@id/spinner_layouts"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/spinner_aliases" />
+
+            <Spinner
+                android:id="@+id/spinner_layouts"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/font_size_header2"
+                android:spinnerMode="dropdown"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/label_select_layout"
+                app:layout_constraintTop_toBottomOf="@id/spinner_aliases" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <!-- Connect Button aligned to height of both rows -->
+        <Button
+            android:id="@+id/btn_connect"
+            android:layout_width="wrap_content"
+            android:layout_height="0dp"
+            android:text="Connect"
+            app:layout_constraintBottom_toBottomOf="@id/group_device_layout"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@id/group_device_layout" />
+
+        <!-- Status Text -->
+        <TextView
+            android:id="@+id/text_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/font_size_header2"
+            android:text="Select a device to connect"
+            android:textSize="@dimen/font_size_header3"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/group_device_layout" />
+
+        <LinearLayout
+            android:id="@+id/timerBar"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_margin="@dimen/font_size_footnote"
+            android:orientation="horizontal"
+            android:weightSum="3"
+            app:layout_constraintBottom_toTopOf="@id/btn_stream_toggle"
+            app:layout_constraintTop_toBottomOf="@id/text_status">
+
+            <!-- Status Text -->
+            <ImageView
+                android:id="@+id/image_signal"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:src="@drawable/signal_level2"
+                app:tint="@color/white" />
+
+            <!-- Status Text -->
+            <TextView
+                android:id="@+id/text_timer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text=""
+                android:textAlignment="center"
+                android:textSize="@dimen/font_size_header2"
+                android:textStyle="italic|bold"
+                app:layout_constraintTop_toBottomOf="@id/group_device_layout" />
+
+            <ImageView
+                android:id="@+id/image_battery"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:src="@drawable/battery_level5"
+                app:tint="@color/white" />
+
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_stream_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start Streaming"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/timerBar" />
+
+        <!-- Spinner row with label -->
+        <LinearLayout
+            android:id="@+id/channel_spinner_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            app:layout_constraintTop_toBottomOf="@id/btn_stream_toggle">
+
+            <TextView
+                android:id="@+id/label_select_channel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Select Channel:"
+                android:textSize="@dimen/font_size_header2" />
+
+            <Spinner
+                android:id="@+id/spinner_channels"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:spinnerMode="dropdown" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/seekbar_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/font_size_paragraph"
+            android:orientation="horizontal"
+            android:weightSum="2"
+            android:visibility="invisible"
+            app:layout_constraintTop_toBottomOf="@id/channel_spinner_row">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="740nm LED"
+                    android:textAlignment="center" />
+
+                <SeekBar
+                    android:id="@+id/seekbar_red"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="10"
+                    android:min="0"
+                    android:thumbTint="@color/red_accessible" />
+
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="860nm LED"
+                    android:textAlignment="center" />
+
+                <SeekBar
+                    android:id="@+id/seekbar_IR"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="10"
+                    android:min="0"
+                    android:thumbTint="@color/black" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvExperiment"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="16dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/seekbar_row" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <RelativeLayout
+        android:id="@+id/runExperimentLayout"
+        android:layout_width="match_parent"
+        android:visibility="gone"
+        android:background="@color/light_gray"
+        android:layout_height="match_parent">
+
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="wrap_content"
+            android:gravity="center"
+            android:layout_centerInParent="true"
+            android:textSize="@dimen/_14sdp"
+            android:layout_height="wrap_content"/>
+
+        <EditText
+            android:id="@+id/etAnswer"
+            android:layout_width="@dimen/_50sdp"
+            android:layout_below="@+id/tvTitle"
+            android:layout_centerInParent="true"
+            android:padding="@dimen/_5sdp"
+            android:focusable="true"
+            android:visibility="gone"
+            android:gravity="center"
+            android:inputType="number"
+            android:background="@drawable/bg_arithmatics_answer_edittext"
+            android:textSize="@dimen/_14sdp"
+            android:layout_marginTop="@dimen/_5sdp"
+            android:layout_height="wrap_content"/>
+    </RelativeLayout>
+</RelativeLayout>

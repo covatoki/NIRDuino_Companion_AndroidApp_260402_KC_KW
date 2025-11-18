@@ -23,4 +23,16 @@
     <color name="red_accessible">#CC6677</color>
     <color name="orange_accessible">#E69F00</color>
     <color name="blue_accessible">#4477AA</color>
+
+    <!--    run-experiment bg color-->
+    <color name="light_gray">#D3D3D3</color>
+    <!--    Breath Holding text colors-->
+    <color name="breath_holding_rest">#404040</color>
+    <color name="breath_holding_stim">#000080</color>
+    <!--    Finger Tapping text colors-->
+    <color name="finger_tapping_rest">#404040</color>
+    <color name="finger_tapping_stim">#006400</color>
+    <!--    Arithmetic text colors-->
+    <color name="arithmetic_rest">#404040</color>
+    <color name="arithmetic_stim">#CC5500</color>
 </resources>

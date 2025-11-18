@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    app:cardCornerRadius="@dimen/_5sdp"
+    app:cardUseCompatPadding="true"
+    android:layout_height="@dimen/_40sdp">
+
+    <TextView
+        android:id="@+id/tvExperimentName"
+        android:layout_width="match_parent"
+        android:text="1. Experiment"
+        android:paddingHorizontal="@dimen/_10sdp"
+        android:gravity="center_vertical"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:background="@color/colorPrimaryValue"
+        android:textSize="@dimen/_10sdp"
+        android:layout_height="match_parent"/>
+</androidx.cardview.widget.CardView>
