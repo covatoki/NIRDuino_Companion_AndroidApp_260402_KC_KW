@@ -37,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.example.nirduino_android_app_v2.device_communication_management.StimulusEvent
 
 class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
 
@@ -103,8 +104,10 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
 
             setupAliasSpinner()
             setupLayoutSpinner()
-            setupChannelSpinner()
+//            setupChannelSpinner()
         }
+
+        binding.channelSpinnerRow.isVisible = false
 
         setupClickListener()
     }
@@ -134,9 +137,6 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                 isConnected = false
                 binding.btnConnect.text = "Connect"
 
-                // Stop connect data for updating visuals on-screen
-                stopPollingServiceData()
-
                 // Updated data streaming button
                 binding.btnStreamToggle.isEnabled = false
                 isStreamToggleEnable = false
@@ -157,7 +157,7 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                 binding.btnStreamToggle.text = "Start Streaming"
                 isStreaming = false
                 Toast.makeText(this, "Streaming stopped", Toast.LENGTH_SHORT).show()
-                stopPollingServiceData()
+
             } else {
                 selectedLayoutName?.let { it1 ->
 
@@ -173,10 +173,20 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                 isStreaming = true
                 Toast.makeText(this, "Streaming started", Toast.LENGTH_SHORT).show()
 
-                startPollingServiceData()
             }
 
         }
+    }
+
+    private fun sendStimulusState(isStimOn: Boolean, label: String) {
+        // isStimOn = true  → 1 (stim)
+        // isStimOn = false → 0 (rest)
+        BLEConnectionManager.broadcastStimulusEvent(
+            StimulusEvent(
+                label = label,
+                isStart = isStimOn
+            )
+        )
     }
 
     private fun setupChannelSpinner() {
@@ -301,194 +311,6 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
         })
     }
 
-    private fun startPollingServiceData() {
-        sqiPollingJob?.cancel()  // kill old job
-        sqiPollingJob = lifecycleScope.launch {
-            Log.d("SQI_POLL", "⏳ Polling job started")
-
-            while (isActive) {
-
-                // Check if device is connected
-                if (!isConnected) {
-                    Log.w("SQI_POLL", "❌ Stopping polling: not connected")
-                    break
-                }
-
-                // Get the latest SQI data and update on-screen visuals
-                val newSQI = BLEConnectionManager.getLatestSQIValues()
-                if (!newSQI.isNullOrEmpty()) {
-                    Log.w("SQI_POLL", "SQI view updated")
-                    updateSignalQualityViews(newSQI)
-                } else {
-                    Log.w("SQI_POLL", "SQI list is empty or null")
-                }
-                delay(pollIntervalMs)
-
-                // Get live RSSI update
-                try {
-                    Log.w("pollingRSSI", "REQUESTED")
-                    BLEConnectionManager.requestConnectionSignalLevel()
-                } catch (e: Exception) {
-                }
-
-                try {
-                    // Get the latest fNIRS data and update on-screen visuals
-                    fNIRSData = BLEConnectionManager.getLatestfNIRSData(maxPoints)
-                    var latestTimestamp = fNIRSData[fNIRSData.size - 1].timestamps.last().toDouble()
-                    var latestTimeStampString = String.format("%.2f", latestTimestamp) + " s"
-                    binding.textTimer.text = latestTimeStampString
-
-                    // Isolate channel-specific voltage data
-                    val selectedChannel = channelCoords[currentChannelSpinnerIndex]
-                    val selectedChannelID = selectedChannel.channelNumber
-
-                    // NOTE: you had a typo; IR was read from redData before.
-                    // Grab the last vectors correctly:
-                    val latestRedVector = fNIRSData.last().redData.last()
-                    val latestIrVector = fNIRSData.last().irData.last()
-
-                    val redDataPoint = latestRedVector[selectedChannelID]
-                    val infraredDataPoint = latestIrVector[selectedChannelID]
-
-                    // Append to rolling buffers (timestamps in seconds)
-                    tsBuffer.add(latestTimestamp.toFloat())
-                    redBuffer.add(redDataPoint.toFloat())
-                    irBuffer.add(infraredDataPoint.toFloat())
-
-                    // Enforce rolling window
-                    while (tsBuffer.size > maxPoints) {
-                        tsBuffer.removeFirst()
-                    }
-                    while (redBuffer.size > maxPoints) {
-                        redBuffer.removeFirst()
-                    }
-                    while (irBuffer.size > maxPoints) {
-                        irBuffer.removeFirst()
-                    }
-
-                    // Push to the plot
-//                    channelPlotView.updateData(
-//                        timestamps = tsBuffer.toList(),
-//                        redSeries  = redBuffer.toList(),
-//                        irSeries   = irBuffer.toList()
-//                    )
-
-                    updateConnectionQualityIndicator(BLEConnectionManager.readLatestSignalLevel())
-
-                    // Log channel-specific voltage data
-                    Log.e(
-                        "todo", "Channel " + selectedChannelID +
-                                " , Red = " + redDataPoint.toString() +
-                                " , Infrared = " + infraredDataPoint.toString()
-                    )
-
-                } catch (e: Exception) {
-
-                    Log.e("StreamfNIRSData", e.toString())
-
-                }
-
-                updateBatteryLevelIndicator(BLEConnectionManager.readLatestBatteryLevel())
-
-            }
-        }
-
-    }
-
-    fun updateBatteryLevelIndicator(batteryPercentage: Int) {
-
-        Log.d("pollingBattery", batteryPercentage.toString())
-
-        val accentColor = ContextCompat.getColor(this, R.color.colorAccentValue) // your accent
-        val amberColor = ContextCompat.getColor(this, R.color.amber_500) // your accent
-        val primaryColor = ContextCompat.getColor(this, R.color.colorPrimaryValue) // your primary
-
-        when {
-            batteryPercentage >= 100 -> {
-                binding.imageBattery.setImageResource(R.drawable.battery_full)
-                binding.imageBattery.setColorFilter(primaryColor)
-            }
-
-            batteryPercentage >= 85 -> {
-                binding.imageBattery.setImageResource(R.drawable.battery_level6)
-                binding.imageBattery.setColorFilter(primaryColor)
-            }
-
-            batteryPercentage >= 62.5 -> {
-                binding.imageBattery.setImageResource(R.drawable.battery_level5)
-                binding.imageBattery.setColorFilter(primaryColor)
-            }
-
-            batteryPercentage >= 50 -> {
-                binding.imageBattery.setImageResource(R.drawable.battery_level4)
-                binding.imageBattery.setColorFilter(amberColor)
-            }
-
-            batteryPercentage >= 37.5 -> {
-                binding.imageBattery.setImageResource(R.drawable.battery_level3)
-                binding.imageBattery.setColorFilter(amberColor)
-            }
-
-            batteryPercentage >= 25 -> {
-                binding.imageBattery.setImageResource(R.drawable.battery_level2)
-                binding.imageBattery.setColorFilter(amberColor)
-            }
-
-            batteryPercentage >= 12.5 -> {
-                binding.imageBattery.setImageResource(R.drawable.battery_level1)
-                binding.imageBattery.setColorFilter(accentColor)
-            }
-
-            batteryPercentage >= 0 -> {
-                binding.imageBattery.setImageResource(R.drawable.battery_empty)
-                binding.imageBattery.setColorFilter(accentColor)
-            }
-        }
-
-    }
-
-    fun updateConnectionQualityIndicator(rssiLevel: Int) {
-
-        Log.d("pollingRSSI", rssiLevel.toString())
-
-        val accentColor = ContextCompat.getColor(this, R.color.colorAccentValue) // your accent
-        val primaryColor = ContextCompat.getColor(this, R.color.colorPrimaryValue) // your primary
-
-        when {
-            rssiLevel >= -60 -> { // excellent signal
-                binding.imageSignal.setImageResource(R.drawable.signal_maximum)
-                binding.imageSignal.setColorFilter(primaryColor)
-            }
-
-            rssiLevel >= -70 -> { // good
-                binding.imageSignal.setImageResource(R.drawable.signal_level3)
-                binding.imageSignal.setColorFilter(primaryColor)
-            }
-
-            rssiLevel >= -80 -> { // fair
-                binding.imageSignal.setImageResource(R.drawable.signal_level2)
-                binding.imageSignal.setColorFilter(accentColor)
-            }
-
-            else -> { // poor
-                binding.imageSignal.setImageResource(R.drawable.signal_low)
-                binding.imageSignal.setColorFilter(accentColor)
-            }
-        }
-
-    }
-
-    private fun updateSignalQualityViews(sqiList: List<Float>) {
-//        sqiOverlay.updateSQI(sqiList)
-//        sqiOverlay.invalidate()
-    }
-
-    private fun stopPollingServiceData() {
-        sqiPollingJob?.cancel()
-        sqiPollingJob = null
-        updateBatteryLevelIndicator(BLEConnectionManager.readLatestBatteryLevel())
-    }
-
     private fun isBluetoothEnabled(): Boolean {
         val manager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         val adapter: BluetoothAdapter? = manager.adapter
@@ -551,8 +373,6 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                     // Enable the various on-screen features
                     binding.seekbarRed.isEnabled = true
                     binding.seekbarIR.isEnabled = true
-                    autoSetLeds();
-//                    autosetLEDs.isEnabled = true
 
                     BLEConnectionManager.setPresetStimulusLabels(stimulusLabels.map { it.label })
 
@@ -561,7 +381,15 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                     isConnected = true
                     binding.btnConnect.text = "Disconnect"
 
-                    BLEConnectionManager.getDeviceBatteryLevel()
+                    lifecycleScope.launch {
+                        // ... after you've confirmed connection is ready ...
+
+                        delay(2000) // 2 seconds artificial delay
+
+                        autoSetLeds()
+                    }
+
+//                    BLEConnectionManager.getDeviceBatteryLevel()
                     binding.imageBattery.setColorFilter(R.color.white)
 
                     val currentIndex = layoutNames.indexOf(selectedLayoutName).coerceAtLeast(0)
@@ -572,7 +400,7 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                 } else {
                     binding.textStatus.setCompoundDrawables(null, null, null, null)
                     binding.textStatus.text = "Connecting to $alias... ($it)"
-                    stopPollingServiceData()
+
                 }
                 delay(500)
             }
@@ -581,9 +409,6 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
             binding.textStatus.setCompoundDrawables(null, null, null, null)
             binding.textStatus.text = "❌ Failed to connect to $alias"
             showErrorDialog("Could not connect to $alias. Please ensure it is powered on and has sufficient battery.")
-
-            // Update on-screen data
-            stopPollingServiceData()
 
         }
     }
@@ -602,7 +427,6 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
             while (true) {
                 val done = BLEConnectionManager.checkIfLEDsAdjusted()
                 if (done == true) {
-//                    autosetLEDs.isEnabled = false
                     isStreamToggleEnable = true
                     binding.btnStreamToggle.isEnabled = true
                     binding.textStatus.text = "Ready to stream!"
@@ -695,12 +519,6 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
             // Channel coords come from the service; may be empty before stream
             channelCoords = BLEConnectionManager.getChannelDisplayData()
 
-//            sqiOverlay.setOverlayData(
-//                sourceList = sources,
-//                detectorList = detectors,
-//                channelList = channelCoords
-//            )
-
             Log.d("LayoutSpinnerSETUP", "sources=$sources")
             Log.d("LayoutSpinnerSETUP", "detectors=$detectors")
             Log.d("LayoutSpinnerSETUP", "channelCoords=$channelCoords")
@@ -788,11 +606,20 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
 
     override fun onExperimentSelected(model: ExperimentModel) {
         if (isStreamToggleEnable) {
+
+            // Ensure this experiment’s label is included once
+            if (stimulusLabels.none { it.label == model.name }) {
+                stimulusLabels.add(StimulusLabel(model.name))
+            }
+
             if (binding.experimentLayout.isVisible) {
                 binding.experimentLayout.visibility = View.GONE
                 binding.runExperimentLayout.visibility = View.VISIBLE
                 startExperiment(model)
             }
+
+            binding.btnStreamToggle.performClick()
+
         } else {
             Toast.makeText(this@ExperimentActivity,"Please check connection", Toast.LENGTH_SHORT).show()
         }
@@ -872,15 +699,25 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                     setTestAndColor(experimentModel.stopStreamText, experimentModel.restColor)
                     delay(experimentModel.totalStopSeconds * 1000L)
                 } else {
-                    // NORMAL MODE (your default code)
-                    binding.btnStreamToggle.performClick()
+                    // NEW: keep streaming; just toggle stimulus state
+
+                    // 🔴 Stim ON  → 1
+                    sendStimulusState(
+                        isStimOn = true,
+                        label = experimentModel.name  // or a fixed label like "TASK"
+                    )
                     setTestAndColor(experimentModel.startStreamText, experimentModel.stimColor)
                     delay(experimentModel.totalWorkingSeconds * 1000L)
 
-                    binding.btnStreamToggle.performClick()
+                    // ⚪ Stim OFF → 0 (rest)
+                    sendStimulusState(
+                        isStimOn = false,
+                        label = experimentModel.name
+                    )
                     setTestAndColor(experimentModel.stopStreamText, experimentModel.restColor)
                     delay(experimentModel.totalStopSeconds * 1000L)
                 }
+
             }
 
             // 4) Final thank you
@@ -890,6 +727,7 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
             )
             hideKeyboard(binding.etAnswer)
             binding.etAnswer.visibility = View.GONE
+            binding.btnStreamToggle.performClick()
         }
     }
 
