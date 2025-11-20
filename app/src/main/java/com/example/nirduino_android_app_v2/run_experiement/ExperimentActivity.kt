@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.nirduino_android_app_v2.MyApplication
@@ -79,6 +80,17 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
     private val redBuffer = ArrayDeque<Float>()
     private val irBuffer = ArrayDeque<Float>()
 
+    private var stopTypingJob: Job? = null
+    private var questionTimerStart: Long = 0L
+    private var questionTimerEnd = 0L
+    private var currentCorrectAnswer = 0
+    private var currentQuestionIndex = 0
+    private var totalQuestions = 0
+    private var currentQuestion = ""
+    private val resultLog = StringBuilder()
+    private var experimentJob: Job? = null
+    private var experimentModel: ExperimentModel? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -109,6 +121,7 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
 
         binding.channelSpinnerRow.isVisible = false
 
+        setupTypingListener()
         setupClickListener()
     }
 
@@ -627,7 +640,12 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
 
     override fun onBackPressed() {
         if (binding.runExperimentLayout.isVisible) {
-            experimentJob?.cancel()
+            if (stopTypingJob?.isActive == true) {
+                stopTypingJob?.cancel()
+            }
+            if (experimentJob?.isActive == true) {
+                experimentJob?.cancel()
+            }
             hideKeyboard(binding.etAnswer)
             binding.etAnswer.visibility = View.GONE
             binding.experimentLayout.visibility = View.VISIBLE
@@ -637,12 +655,76 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
         }
     }
 
-    private var currentQuestion = ""
-    private var questionStartTime = 0L
-    private val resultLog = StringBuilder()
-    private var experimentJob: Job? = null
+    private fun setupTypingListener() {
+        binding.etAnswer.addTextChangedListener { text ->
+
+            // Start timer when user types first character
+//            if (text?.isNotEmpty() == true) {
+//
+//            }
+
+            // Cancel old stop-typing detector
+            stopTypingJob?.cancel()
+
+            // Start a new 2-second "no typing" detector
+            stopTypingJob = lifecycleScope.launch {
+                delay(2000)  // 2 sec no typing
+
+                if (binding.etAnswer.text.toString().trim().isEmpty()) {
+                    return@launch
+                }
+
+                onUserStoppedTyping()
+            }
+        }
+    }
+
+
+    private fun onUserStoppedTyping() {
+        // If empty → don't move to next question
+        val userAnswer = binding.etAnswer.text.toString().trim()
+        if (userAnswer.isEmpty()) return
+
+        questionTimerEnd = System.currentTimeMillis()
+
+        val timeTaken = if (questionTimerStart > 0) {
+            (questionTimerEnd - questionTimerStart) / 1000
+        } else 0
+
+        resultLog.append(
+            "$currentQuestion = $currentCorrectAnswer | Your answer: $userAnswer | Time: ${timeTaken}s\n"
+        )
+
+        binding.etAnswer.setText("")
+
+        loadNextArithmeticQuestion()
+    }
+
+
+    private fun loadNextArithmeticQuestion() {
+        if (currentQuestionIndex >= totalQuestions) return
+
+        // Generate question
+        val (question, answer) = generateArithmeticQuestion()
+
+        currentQuestion = question
+        currentCorrectAnswer = answer
+
+        // Show question
+        setTestAndColor("$question = ?", experimentModel?.stimColor!!)
+
+        questionTimerStart = System.currentTimeMillis()
+
+        // Reset typing state
+        binding.etAnswer.setText("")
+//        questionTimerStart = 0L
+
+        currentQuestionIndex++
+    }
 
     private fun startExperiment(experimentModel: ExperimentModel) {
+        this.experimentModel = experimentModel
+
         experimentJob = lifecycleScope.launch {
             // 1) First message (5 sec)
             setTestAndColor("Please sit in a relaxed\nmanner", experimentModel.restColor)
@@ -662,45 +744,23 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                     binding.etAnswer.visibility = View.VISIBLE
                     showKeyboard(binding.etAnswer)
 
-                    val perQuestionTime =
-                        experimentModel.totalWorkingSeconds / 2   // seconds per question
-                    val questionCount = experimentModel.totalWorkingSeconds / perQuestionTime
+                    totalQuestions = experimentModel.totalWorkingSeconds / 2
+                    currentQuestionIndex = 0
 
-                    repeat(questionCount) { index ->
-                        // 1) Generate question
-                        val (question, answer) = generateArithmeticQuestion()
-                        currentQuestion = question
+                    loadNextArithmeticQuestion()  // Start first question
 
-                        // Start time
-                        questionStartTime = System.currentTimeMillis()
-
-                        // 2) Show question
-                        setTestAndColor("$question = ?", experimentModel.stimColor)
-
-                        // 3) Wait 5 sec for this question
-                        delay(perQuestionTime * 1000L)
-
-                        // 4) Read user answer
-                        val userAnswer = binding.etAnswer.text.toString().trim()
-                        binding.etAnswer.setText("") // clear
-
-                        // 5) Calculate time
-                        val timeTaken = System.currentTimeMillis() - questionStartTime
-
-                        // 6) Store result
-                        resultLog.append(
-                            "$question = $answer | Your answer: $userAnswer | Time: ${timeTaken / 1000} sec\n"
-                        )
+                    // Wait until all questions done
+                    while (currentQuestionIndex < totalQuestions) {
+                        delay(100)  // lightweight check
                     }
 
-                    // REST PERIOD (for entire cycle)
+                    // REST PERIOD
                     hideKeyboard(binding.etAnswer)
                     binding.etAnswer.visibility = View.GONE
                     setTestAndColor(experimentModel.stopStreamText, experimentModel.restColor)
                     delay(experimentModel.totalStopSeconds * 1000L)
                 } else {
                     // NEW: keep streaming; just toggle stimulus state
-
                     // 🔴 Stim ON  → 1
                     sendStimulusState(
                         isStimOn = true,
