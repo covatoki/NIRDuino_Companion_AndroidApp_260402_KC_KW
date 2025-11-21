@@ -744,10 +744,20 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
 
                     currentQuestionIndex = 0
 
+                    // 🔴 Stim ON  → 1
+                    sendStimulusState(
+                        isStimOn = true,
+                        label = experimentModel.name  // or a fixed label like "TASK"
+                    )
                     loadNextArithmeticQuestion()
                     delay(experimentModel.totalWorkingSeconds * 1000L)
 
                     // REST PERIOD
+                    // ⚪ Stim OFF → 0 (rest)
+                    sendStimulusState(
+                        isStimOn = false,
+                        label = experimentModel.name
+                    )
                     stopTypingJob?.cancel()
                     hideKeyboard(binding.etAnswer)
                     binding.etAnswer.visibility = View.GONE
