@@ -16,6 +16,7 @@ import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
@@ -85,7 +86,6 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
     private var questionTimerEnd = 0L
     private var currentCorrectAnswer = 0
     private var currentQuestionIndex = 0
-    private var totalQuestions = 0
     private var currentQuestion = ""
     private val resultLog = StringBuilder()
     private var experimentJob: Job? = null
@@ -618,17 +618,17 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
     }
 
     override fun onExperimentSelected(model: ExperimentModel) {
+        if (binding.experimentLayout.isVisible) {
+            binding.experimentLayout.visibility = View.GONE
+            binding.runExperimentLayout.visibility = View.VISIBLE
+            startExperiment(model)
+        }
+
         if (isStreamToggleEnable) {
 
             // Ensure this experiment’s label is included once
             if (stimulusLabels.none { it.label == model.name }) {
                 stimulusLabels.add(StimulusLabel(model.name))
-            }
-
-            if (binding.experimentLayout.isVisible) {
-                binding.experimentLayout.visibility = View.GONE
-                binding.runExperimentLayout.visibility = View.VISIBLE
-                startExperiment(model)
             }
 
             binding.btnStreamToggle.performClick()
@@ -668,9 +668,9 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
 
             // Start a new 2-second "no typing" detector
             stopTypingJob = lifecycleScope.launch {
-                delay(2000)  // 2 sec no typing
+                delay(1000)  // 1 sec no typing
 
-                if (binding.etAnswer.text.toString().trim().isEmpty()) {
+                if (binding.etAnswer.isGone && binding.etAnswer.text.toString().trim().isEmpty()) {
                     return@launch
                 }
 
@@ -702,8 +702,6 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
 
 
     private fun loadNextArithmeticQuestion() {
-        if (currentQuestionIndex >= totalQuestions) return
-
         // Generate question
         val (question, answer) = generateArithmeticQuestion()
 
@@ -744,17 +742,13 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
                     binding.etAnswer.visibility = View.VISIBLE
                     showKeyboard(binding.etAnswer)
 
-                    totalQuestions = experimentModel.totalWorkingSeconds / 2
                     currentQuestionIndex = 0
 
-                    loadNextArithmeticQuestion()  // Start first question
-
-                    // Wait until all questions done
-                    while (currentQuestionIndex < totalQuestions) {
-                        delay(100)  // lightweight check
-                    }
+                    loadNextArithmeticQuestion()
+                    delay(experimentModel.totalWorkingSeconds * 1000L)
 
                     // REST PERIOD
+                    stopTypingJob?.cancel()
                     hideKeyboard(binding.etAnswer)
                     binding.etAnswer.visibility = View.GONE
                     setTestAndColor(experimentModel.stopStreamText, experimentModel.restColor)

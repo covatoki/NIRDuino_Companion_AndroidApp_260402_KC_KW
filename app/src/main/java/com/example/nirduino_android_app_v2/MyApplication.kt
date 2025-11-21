@@ -58,8 +58,8 @@ class MyApplication : Application() {
                 startDescription = "Please be ready to solve arithmetic problems in 3, 2, 1..",
                 startStreamText = "22 + 55",
                 stopStreamText = "RELAX",
-                totalWorkingSeconds = 10,
-                totalStopSeconds = 5,
+                totalWorkingSeconds = 30,
+                totalStopSeconds = 30,
                 restColor = resources.getColor(R.color.arithmetic_rest),
                 stimColor = resources.getColor(R.color.arithmetic_stim)
             )
