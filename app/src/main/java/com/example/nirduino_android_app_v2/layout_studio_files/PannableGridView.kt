@@ -145,7 +145,7 @@ class PannableGridView @JvmOverloads constructor(
 
         canvas.restore()
 
-        // ---- 2) Draw coordinate badge in *screen* space (not scaled) ----
+        // ---- 2) Draw coordinate badge ABOVE item + ARROW ----
         draggingItem?.let { item ->
             val screenX = offsetX + item.x * scaleFactor
             val screenY = offsetY + item.y * scaleFactor
@@ -159,25 +159,55 @@ class PannableGridView @JvmOverloads constructor(
             val fm = coordTextPaint.fontMetrics
             val textHeight = (fm.bottom - fm.top)
 
-            // Position badge slightly to bottom-right of the point
-            val left = screenX + coordNudge
-            val top = screenY + coordNudge
-            val right = left + textWidth + 2 * coordPadH
-            val bottom = top + textHeight + 2 * coordPadV
+            // Badge width/height
+            val badgeWidth = textWidth + 2 * coordPadH
+            val badgeHeight = textHeight + 2 * coordPadV
 
-            // Keep on screen if near edges
-            val adjLeft = right.coerceAtMost(width.toFloat() - 4f * density) - (textWidth + 2 * coordPadH)
-            val adjTop = bottom.coerceAtMost(height.toFloat() - 4f * density) - (textHeight + 2 * coordPadV)
-            val adjRight = adjLeft + textWidth + 2 * coordPadH
-            val adjBottom = adjTop + textHeight + 2 * coordPadV
+            // ---- BADGE POSITION ABOVE ITEM ----
+            val arrowHeight = 12f * density
+            val spacing = 6f * density
 
-            val rect = RectF(adjLeft, adjTop, adjRight, adjBottom)
+            val centerX = screenX          // item center
+            val badgeLeft = centerX - badgeWidth / 2f
+            val badgeBottom = screenY - spacing - arrowHeight
+            val badgeTop = badgeBottom - badgeHeight
+            val badgeRight = badgeLeft + badgeWidth
+
+            val rect = RectF(badgeLeft, badgeTop, badgeRight, badgeBottom)
+
+            // Keep inside screen X bounds
+            val shiftX =
+                when {
+                    rect.left < 0 -> -rect.left + 4 * density
+                    rect.right > width -> width - rect.right - 4 * density
+                    else -> 0f
+                }
+
+            rect.offset(shiftX, 0f)
+
+            // ---- DRAW BADGE ----
             canvas.drawRoundRect(rect, coordCorner, coordCorner, coordBgPaint)
             canvas.drawRoundRect(rect, coordCorner, coordCorner, coordBorderPaint)
 
-            val textX = adjLeft + coordPadH
-            val textY = adjTop + coordPadV - fm.top // align to top padding
+            // ---- TEXT ----
+            val textX = rect.left + coordPadH
+            val textY = rect.top + coordPadV - fm.top
             canvas.drawText(label, textX, textY, coordTextPaint)
+
+            // ---- DRAW ARROW (small triangle) ----
+            val arrowCenterX = rect.centerX()
+            val arrowTopY = rect.bottom
+            val arrowBottomY = arrowTopY + arrowHeight
+
+            val arrowPath = Path().apply {
+                moveTo(arrowCenterX, arrowBottomY)           // bottom point
+                lineTo(arrowCenterX - 10f * density, arrowTopY) // left
+                lineTo(arrowCenterX + 10f * density, arrowTopY) // right
+                close()
+            }
+
+            canvas.drawPath(arrowPath, coordBgPaint)
+            canvas.drawPath(arrowPath, coordBorderPaint)
         }
     }
 
