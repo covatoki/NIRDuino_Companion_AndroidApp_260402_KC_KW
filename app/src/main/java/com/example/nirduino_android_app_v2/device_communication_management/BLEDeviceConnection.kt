@@ -316,7 +316,8 @@ class BleDeviceConnection(
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             val data = characteristic.value
             val size = data.size
-            if (size !in listOf(480, 480, 480, 480, 344, 32, 4)) {
+            Log.w("BleDeviceConnection", "[$alias] Received: $size bytes")
+            if (size !in listOf(480, 480, 480, 480, 344, 32, 4, 208)) {
                 Log.w("BleDeviceConnection", "[$alias] Unexpected packet size: $size")
                 return
             }

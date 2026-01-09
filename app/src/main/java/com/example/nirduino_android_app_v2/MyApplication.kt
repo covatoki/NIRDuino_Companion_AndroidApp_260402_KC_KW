@@ -45,8 +45,8 @@ class MyApplication : Application() {
                 startDescription = "Please be ready to tap your finger in 3, 2, 1..",
                 startStreamText = "Please tap your finger",
                 stopStreamText = "RELAX",
-                totalWorkingSeconds = 5,
-                totalStopSeconds = 5,
+                totalWorkingSeconds = 30,
+                totalStopSeconds = 30,
                 restColor = resources.getColor(R.color.finger_tapping_rest),
                 stimColor = resources.getColor(R.color.finger_tapping_stim)
             ),

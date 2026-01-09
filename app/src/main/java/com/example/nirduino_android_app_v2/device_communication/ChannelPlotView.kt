@@ -119,9 +119,15 @@ class ChannelPlotView @JvmOverloads constructor(
         val tMax = ts.last()
         val eps = 1e-6f
 
-        // Y limits strictly from data
-        val yMin = min(red.minOrNull() ?: 0f, ir.minOrNull() ?: 0f)
-        val yMax = max(red.maxOrNull() ?: 1f, ir.maxOrNull() ?: 1f)
+        // --- Y-axis with ±10% padding ---
+        val rawMin = min(red.minOrNull() ?: 0f, ir.minOrNull() ?: 0f)
+        val rawMax = max(red.maxOrNull() ?: 1f, ir.maxOrNull() ?: 1f)
+
+        val span = rawMax - rawMin
+        val padding = span * 0.25f    // 10% on each side
+
+        val yMin = rawMin - padding
+        val yMax = rawMax + padding
 
         fun xAt(t: Float) = paddingLeft + ((t - tMin) / (tMax - tMin + eps)) * plotWidth
         fun yAt(v: Float) = paddingTop + plotHeight * (1f - ((v - yMin) / (yMax - yMin + eps)))

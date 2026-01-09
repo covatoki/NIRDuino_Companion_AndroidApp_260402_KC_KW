@@ -43,6 +43,8 @@ import kotlinx.coroutines.launch
 import java.io.File
 import kotlinx.coroutines.isActive
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class StreamfNIRSData : AppCompatActivity() {
 
@@ -65,7 +67,7 @@ class StreamfNIRSData : AppCompatActivity() {
 
     private lateinit var sqiOverlay: SignalQualityOverlay
 
-    private var pollIntervalMs: Long = 200  // Adjustable polling interval in milliseconds
+    private var pollIntervalMs: Long = 300  // Adjustable polling interval in milliseconds
     private var sqiPollingJob: Job? = null
 
     private var signalQualityIndicator: ImageView? = null
@@ -643,93 +645,106 @@ class StreamfNIRSData : AppCompatActivity() {
         }
     }
 
+    private val PLOT_UPDATE_INTERVAL_MS = 200L     // update plot at most 2×/sec
+    private val SQI_UPDATE_INTERVAL_MS  = 5000L    // SQI only needed 1×/sec
 
-
+    private var lastPlotUpdateTime = 0L
+    private var lastSQIUpdateTime  = 0L
 
     private fun startPollingServiceData() {
-        sqiPollingJob?.cancel()  // kill old job
-        sqiPollingJob = lifecycleScope.launch {
-            Log.d("SQI_POLL", "⏳ Polling job started")
 
-            while (isActive) {
+        sqiPollingJob?.cancel()
+        sqiPollingJob = lifecycleScope.launch(Dispatchers.Default) {
 
-                // Check if device is connected
-                if (!isConnected) {
-                    Log.w("SQI_POLL", "❌ Stopping polling: not connected")
-                    break
+            Log.d("DATA_POLL", "Polling engine started on background thread")
+
+            while (isActive && isConnected) {
+
+                val now = System.currentTimeMillis()
+
+                // -------------------------------------------------------
+                // 1️⃣  FETCH RAW DATA FROM BLE SERVICE (NON-UI THREAD)
+                // -------------------------------------------------------
+                val sqiValues =
+                    if (now - lastSQIUpdateTime > SQI_UPDATE_INTERVAL_MS)
+                        BLEConnectionManager.getLatestSQIValues()
+                    else null
+
+                val fNIRS = BLEConnectionManager.getLatestfNIRSData(maxPoints)
+                val batteryLevel = BLEConnectionManager.readLatestBatteryLevel()
+                val rssiLevel    = BLEConnectionManager.readLatestSignalLevel()
+
+                // -------------------------------------------------------
+                // 2️⃣  PROCESS fNIRS DATA (BACKGROUND THREAD)
+                // -------------------------------------------------------
+                var latestTimestamp = 0.0
+                var redPoint = 0f
+                var irPoint  = 0f
+
+                try {
+                    if (fNIRS.isNotEmpty()) {
+                        val lastRound = fNIRS.last()
+                        latestTimestamp = lastRound.timestamps.last().toDouble()
+
+                        val ch = channelCoords[currentChannelSpinnerIndex]
+                        val chId = ch.channelNumber
+
+                        val latestRedVector = lastRound.redData.last()
+                        val latestIrVector  = lastRound.irData.last()
+
+                        redPoint = latestRedVector[chId].toFloat()
+                        irPoint  = latestIrVector[chId].toFloat()
+
+                        // Rolling buffers (BACKGROUND)
+                        tsBuffer.add(latestTimestamp.toFloat())
+                        redBuffer.add(redPoint)
+                        irBuffer.add(irPoint)
+
+                        while (tsBuffer.size > maxPoints) tsBuffer.removeFirst()
+                        while (redBuffer.size > maxPoints) redBuffer.removeFirst()
+                        while (irBuffer.size > maxPoints) irBuffer.removeFirst()
+                    }
+                } catch (e: Exception) {
+                    Log.e("DATA_POLL", "Error processing fNIRS: $e")
                 }
 
-                // Get the latest SQI data and update on-screen visuals
-                val newSQI = BLEConnectionManager.getLatestSQIValues()
-                if (!newSQI.isNullOrEmpty()) {
-                    Log.w("SQI_POLL", "SQI view updated")
-                    updateSignalQualityViews(newSQI)
-                } else {
-                    Log.w("SQI_POLL", "SQI list is empty or null")
+                // -------------------------------------------------------
+                // 3️⃣  SWITCH TO UI THREAD ONLY FOR VISUAL UPDATES
+                // -------------------------------------------------------
+                withContext(Dispatchers.Main) {
+
+                    // ---- Update timestamp display ----
+                    onScreenTimer.text = String.format("%.2f s", latestTimestamp)
+
+                    // ---- Update RSSI + Battery ----
+                    updateConnectionQualityIndicator(rssiLevel)
+                    updateBatteryLevelIndicator(batteryLevel)
+
+                    // ---- Update SQI UI (THROTTLED) ----
+                    if (sqiValues != null && (now - lastSQIUpdateTime > SQI_UPDATE_INTERVAL_MS)) {
+                        updateSignalQualityViews(sqiValues)
+                        lastSQIUpdateTime = now
+                    }
+
+                    // ---- Update plot UI (THROTTLED) ----
+                    if (now - lastPlotUpdateTime > PLOT_UPDATE_INTERVAL_MS) {
+                        channelPlotView.updateData(
+                            timestamps = tsBuffer.toList(),
+                            redSeries  = redBuffer.toList(),
+                            irSeries   = irBuffer.toList()
+                        )
+                        lastPlotUpdateTime = now
+                    }
                 }
+
+                // -------------------------------------------------------
+                // 4️⃣  DELAY LOOP (NOW SAFE)
+                // -------------------------------------------------------
                 delay(pollIntervalMs)
-
-                // Get live RSSI update
-                try{
-                    Log.w("pollingRSSI", "REQUESTED")
-                    BLEConnectionManager.requestConnectionSignalLevel()
-                }catch (e: Exception){}
-
-                try{
-                    // Get the latest fNIRS data and update on-screen visuals
-                    fNIRSData = BLEConnectionManager.getLatestfNIRSData(maxPoints)
-                    var latestTimestamp = fNIRSData[fNIRSData.size-1].timestamps.last().toDouble()
-                    var latestTimeStampString = String.format("%.2f", latestTimestamp) + " s"
-                    onScreenTimer.setText(latestTimeStampString)
-
-                    // Isolate channel-specific voltage data
-                    val selectedChannel = channelCoords[currentChannelSpinnerIndex]
-                    val selectedChannelID = selectedChannel.channelNumber
-
-                    // NOTE: you had a typo; IR was read from redData before.
-                    // Grab the last vectors correctly:
-                    val latestRedVector = fNIRSData.last().redData.last()
-                    val latestIrVector  = fNIRSData.last().irData.last()
-
-                    val redDataPoint = latestRedVector[selectedChannelID]
-                    val infraredDataPoint = latestIrVector[selectedChannelID]
-
-                    // Append to rolling buffers (timestamps in seconds)
-                    tsBuffer.add(latestTimestamp.toFloat())
-                    redBuffer.add(redDataPoint.toFloat())
-                    irBuffer.add(infraredDataPoint.toFloat())
-
-                    // Enforce rolling window
-                    while (tsBuffer.size > maxPoints) { tsBuffer.removeFirst() }
-                    while (redBuffer.size > maxPoints) { redBuffer.removeFirst() }
-                    while (irBuffer.size  > maxPoints) { irBuffer.removeFirst() }
-
-                    // Push to the plot
-                    channelPlotView.updateData(
-                        timestamps = tsBuffer.toList(),
-                        redSeries  = redBuffer.toList(),
-                        irSeries   = irBuffer.toList()
-                    )
-
-                    updateConnectionQualityIndicator(BLEConnectionManager.readLatestSignalLevel())
-
-                    // Log channel-specific voltage data
-                    Log.e("todo", "Channel " + selectedChannelID +
-                            " , Red = " + redDataPoint.toString() +
-                            " , Infrared = " + infraredDataPoint.toString())
-
-                }
-                catch (e: Exception){
-
-                    Log.e("StreamfNIRSData", e.toString())
-
-                }
-
-                updateBatteryLevelIndicator(BLEConnectionManager.readLatestBatteryLevel())
-
             }
-        }
 
+            Log.d("DATA_POLL", "Polling engine stopped")
+        }
     }
 
     fun updateBatteryLevelIndicator(batteryPercentage: Int){
@@ -1079,6 +1094,9 @@ class StreamfNIRSData : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        var sessionNotes = experimentalNotes.text.toString()
+        BLEConnectionManager.stopService(this, sessionNotes)
 
         stopPollingServiceData()
 

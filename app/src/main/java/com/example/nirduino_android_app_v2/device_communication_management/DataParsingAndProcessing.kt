@@ -58,7 +58,7 @@ class DataParsingAndProcessing {
     var latestSignalRating: List<Float> = emptyList()
         private set
 
-    private val sqiWindowSeconds = 15.0f
+    private val sqiWindowSeconds = 5.0f
 
     // at top of DataParsingAndProcessing
     private var csvLogger: CsvSessionLogger? = null
@@ -91,15 +91,21 @@ class DataParsingAndProcessing {
             for (d in 1..16) {
                 header.append(", S${s}_D${d}_Red_RP")
                 header.append(", S${s}_D${d}_IR_RP")
-                header.append(", ledPowerLevel_Red_RP, ledPowerLevel_IR_RP")
                 header.append(", S${s}_D${d}_Red_LP")
                 header.append(", S${s}_D${d}_IR_LP")
-                header.append(", ledPowerLevel_Red_LP, ledPowerLevel_IR_LP")
             }
         }
 
         for (d in 1..16) {
             header.append(", D${d}_DC")
+        }
+
+        for (s in 1..8) {
+            header.append(", S${s}_PL_Red_RP, S${s}_PL_IR_RP")
+        }
+
+        for (s in 1..8) {
+            header.append(", S${s}_PL_Red_LP, S${s}_PL_IR_LP")
         }
 
         return header.toString()
@@ -109,7 +115,7 @@ class DataParsingAndProcessing {
 
         wrap.order(ByteOrder.LITTLE_ENDIAN)
 
-        Log.d("RECEIVED_BLE", wrap.capacity().toString())
+//        Log.d("RECEIVED_BLE", wrap.capacity().toString())
 
         when (wrap.capacity()) {
             289 -> {
@@ -246,16 +252,26 @@ class DataParsingAndProcessing {
             for (d in 0..15) {
                 lineBuilder.append(", ").append(dataArray[s * 2][d])           // Red RP
                 lineBuilder.append(", ").append(dataArray[s * 2 + 1][d])       // IR RP
-                lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2 - 1])
-                lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2])
                 lineBuilder.append(", ").append(dataArray[s * 2 + 16][d])      // Red LP
                 lineBuilder.append(", ").append(dataArray[s * 2 + 1 + 16][d])  // IR LP
-                lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2 - 1 + 16])
-                lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2 + 16])
             }
         }
+
+        // Log the dark current measurements
         for (d in 0 until 16) {
             lineBuilder.append(", ").append(darkCurrentMeasurements[d])
+        }
+
+        // Log the regular power intensities
+        for (s in 0..7) {
+            lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2 - 1])
+            lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2])
+        }
+
+        // Log the low power intensities
+        for (s in 0..7) {
+            lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2 - 1 + 16])
+            lineBuilder.append(", ").append(ledIntensityValues[(s + 1) * 2 + 16])
         }
 
         // ✅ stream to file (no RAM growth)
@@ -432,8 +448,8 @@ class DataParsingAndProcessing {
         val sqiScores = MutableList(numChannels) { 1f }
 
         // Allowed raw input voltage range BEFORE bias removal
-        val minAllowed = 1.40
-        val maxAllowed = 4.80
+        val minAllowed = 0.45
+        val maxAllowed = 4.50
 
         for (ch in 0 until numChannels) {
 
@@ -446,7 +462,7 @@ class DataParsingAndProcessing {
             if (rawRed.any { it < minAllowed || it > maxAllowed } ||
                 rawIr.any  { it < minAllowed || it > maxAllowed }) {
                 sqiScores[ch] = 1f
-                Log.w("SQICalc", "Ch $currChannel: raw input outside ${minAllowed}–${maxAllowed} V → SQI=1")
+//                Log.w("SQICalc", "Ch $currChannel: raw input outside ${minAllowed}–${maxAllowed} V → SQI=1")
                 continue
             }
 
@@ -500,14 +516,14 @@ class DataParsingAndProcessing {
 
             if (snrBest < snrThresh) {
                 sqiScores[ch] = 1f
-                Log.i("SQICalc", "Ch $currChannel: RAW-V SNR fail (${String.format("%.2f", snrBest)} < $snrThresh) → SQI=1")
+//                Log.i("SQICalc", "Ch $currChannel: RAW-V SNR fail (${String.format("%.2f", snrBest)} < $snrThresh) → SQI=1")
                 continue
             }
 
             // ── Stage 1B: Flatline check ────────────────────────────────────────
             if (getStandardDeviation(OD1) == 0.0 || getStandardDeviation(OD2) == 0.0) {
                 sqiScores[ch] = 1f
-                Log.i("SQICalc", "Ch $currChannel: flatline OD → SQI=1")
+//                Log.i("SQICalc", "Ch $currChannel: flatline OD → SQI=1")
                 continue
             }
 
@@ -548,7 +564,7 @@ class DataParsingAndProcessing {
             val ratio = rms(oxy_filt) / rms(dxy_filt)
             if (ratio < 0.67) {
                 sqiScores[ch] = 1f
-                Log.i("SQICalc", "Ch $currChannel: Ratio is $ratio Hb imbalance < 0.67 → SQI=1")
+//                Log.i("SQICalc", "Ch $currChannel: Ratio is $ratio Hb imbalance < 0.67 → SQI=1")
                 continue
             }
 
@@ -558,11 +574,11 @@ class DataParsingAndProcessing {
             val stdDiff = getStandardDeviation(ac1.zip(ac2) { a, b -> a - b })
             if ((1 / stdDiff) > 40) {
                 sqiScores[ch] = 5f
-                Log.i("SQICalc", "Ch $currChannel: autocorr criterion met → SQI=5")
+//                Log.i("SQICalc", "Ch $currChannel: autocorr criterion met → SQI=5")
                 continue
             }
             else{
-                Log.i("SQICalc", "Ch $currChannel: final SQI is $")
+//                Log.i("SQICalc", "Ch $currChannel: final SQI is $")
                 sqiScores[ch] = 3.0f
             }
 
