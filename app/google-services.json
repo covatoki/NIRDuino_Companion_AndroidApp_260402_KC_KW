@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "507509520240",
+    "project_id": "nirduino-18999",
+    "storage_bucket": "nirduino-18999.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:507509520240:android:81ea0c815b43623704c1b5",
+        "android_client_info": {
+          "package_name": "com.bbol.nirduino_android_app_v2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "507509520240-lee8ldt12cid7d5mt8f7gljdb5mucmc7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bbol.nirduino_android_app_v2",
+            "certificate_hash": "0bdedb2a8b295faf08d3759e69578129a0ebac98"
+          }
+        },
+        {
+          "client_id": "507509520240-imhrl34dgvr7ek6je79c0vnjnu85844n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0EPx72IO-xMR1v7ros-7K0H7Mk9pnD_Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "507509520240-imhrl34dgvr7ek6je79c0vnjnu85844n.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

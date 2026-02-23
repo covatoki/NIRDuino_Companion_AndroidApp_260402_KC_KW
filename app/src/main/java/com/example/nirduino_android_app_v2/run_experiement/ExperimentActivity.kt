@@ -618,17 +618,17 @@ class ExperimentActivity : AppCompatActivity(), OnExperimentClickListener {
     }
 
     override fun onExperimentSelected(model: ExperimentModel) {
-        if (binding.experimentLayout.isVisible) {
-            binding.experimentLayout.visibility = View.GONE
-            binding.runExperimentLayout.visibility = View.VISIBLE
-            startExperiment(model)
-        }
-
         if (isStreamToggleEnable) {
 
             // Ensure this experiment’s label is included once
             if (stimulusLabels.none { it.label == model.name }) {
                 stimulusLabels.add(StimulusLabel(model.name))
+            }
+
+            if (binding.experimentLayout.isVisible) {
+                binding.experimentLayout.visibility = View.GONE
+                binding.runExperimentLayout.visibility = View.VISIBLE
+                startExperiment(model)
             }
 
             binding.btnStreamToggle.performClick()

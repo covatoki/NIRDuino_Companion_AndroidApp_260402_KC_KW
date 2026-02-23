@@ -11,17 +11,21 @@ import com.example.nirduino_android_app_v2.snirf_convert_files.SNIRFConverter
 import android.os.Build
 import android.Manifest
 import android.content.pm.PackageManager
+import android.widget.TextView
 import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.nirduino_android_app_v2.auth.LoginActivity
 import com.example.nirduino_android_app_v2.device_communication.StreamfNIRSData
 import com.example.nirduino_android_app_v2.participant_manager.ParticipantManager
 import com.example.nirduino_android_app_v2.run_experiement.ExperimentActivity
 import com.example.nirduino_android_app_v2.util.AppPermissionHelper
+import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var recyclerView: RecyclerView
+    private lateinit var btnLogout: TextView
 
     private val requiredPermissions = mutableListOf(
         Manifest.permission.ACCESS_FINE_LOCATION
@@ -60,6 +64,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        btnLogout = findViewById(R.id.btnLogout)
+
         recyclerView = findViewById(R.id.cardRecyclerView)
         recyclerView.layoutManager = GridLayoutManager(this, calculateSpanCount())
 
@@ -88,7 +94,11 @@ class MainActivity : AppCompatActivity() {
 //        // Check Bluetooth + Location enabled
 //        val servicesEnabled = AppPermissionHelper.ensureBluetoothAndLocationEnabled(this)
 
-
+        btnLogout.setOnClickListener {
+            FirebaseAuth.getInstance().signOut()
+            startActivity(Intent(this, LoginActivity::class.java))
+            finishAffinity()
+        }
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)

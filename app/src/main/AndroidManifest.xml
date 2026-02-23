@@ -23,15 +23,14 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@drawable/ic_app_icon"
-        android:label="@string/app_name"
         android:roundIcon="@drawable/ic_app_icon"
+        android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.NIRDuino_Android_App_v2"
         tools:targetApi="31">
         <activity
             android:name=".disclaimer.disclaimerPage"
-            android:exported="false">
-        </activity>
+            android:exported="false"></activity>
         <activity
             android:name=".participant_manager.ParticipantForm"
             android:exported="false" />
@@ -53,11 +52,12 @@
         <activity
             android:name=".device_communication.StreamfNIRSData"
             android:exported="false" />
-        <activity android:name=".run_experiement.ExperimentActivity"
-            android:exported="false"/>
+        <activity
+            android:name=".run_experiement.ExperimentActivity"
+            android:exported="false" />
 
         <activity
-            android:name=".MainActivity"
+            android:name=".auth.LoginActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.NIRDuino_Android_App_v2">
@@ -69,6 +69,18 @@
             </intent-filter>
 
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".auth.RegisterActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".auth.VerificationActivity"
+            android:exported="false" />
 
         <activity android:name=".layout_studio_files.LayoutStudio" />
 
