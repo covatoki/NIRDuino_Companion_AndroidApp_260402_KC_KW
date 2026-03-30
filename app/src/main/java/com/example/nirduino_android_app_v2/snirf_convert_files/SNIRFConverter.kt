@@ -343,7 +343,7 @@ class SNIRFConverter : AppCompatActivity() {
         withContext(Dispatchers.IO) {
             val base = desiredName.substringBeforeLast('.', desiredName)
             val outName = if (base.lowercase(Locale.US).endsWith(".snirf")) base else "$base.snirf"
-            val subPath = "NIRDuinoCompanion/SNIRFOutputs"
+            val subPath = "NIRDuinoCompanion/SNIRF_Outputs"
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
