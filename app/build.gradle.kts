@@ -5,7 +5,6 @@ plugins {
     id("kotlin-kapt")
     id("kotlin-parcelize")
     id("dagger.hilt.android.plugin")
-    id("com.google.gms.google-services")
 }
 
 android {
@@ -65,10 +64,10 @@ android {
 
 }
 
-val roomVersion = "2.7.2"
+val roomVersion       = "2.7.2"
 val coroutinesVersion = "1.8.1"
-val lifecycleVersion = "2.8.0"
-val hiltVersion = "2.51"
+val lifecycleVersion  = "2.8.0"
+val hiltVersion       = "2.51"
 
 dependencies {
 
@@ -145,15 +144,6 @@ dependencies {
 
     //sdp library
     implementation("com.intuit.sdp:sdp-android:1.1.1")
-
-    //firebase
-    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-firestore")
-    implementation("androidx.credentials:credentials:1.5.0")
-    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 }
 
 /* ---------- KAPT speed-ups ---------- */
