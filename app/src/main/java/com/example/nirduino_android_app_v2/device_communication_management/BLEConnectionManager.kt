@@ -1,5 +1,6 @@
 package com.example.nirduino_android_app_v2.device_communication_management
 
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -25,84 +26,123 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+
 class BLEConnectionManager : Service() {
+
 
     private val serviceThread = HandlerThread("BLEServiceThread").apply { start() }
     private val serviceHandler = Handler(serviceThread.looper)
 
-    // ***** Single-connection state *****
-    var connection: BleDeviceConnection? = null
-    private var targetMac: String? = null
-    private var targetAlias: String? = null
+
+    // ***** Multiple-connection state *****
+    // Keep tract of multiple devices simultaneously
+    private val connections = mutableMapOf<String, BleDeviceConnection>()
+    private val targetDevices = mutableMapOf<String, String>()
+
 
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private var bluetoothLeScanner: BluetoothLeScanner? = null
     private val scanCallback = BleScanCallback()
 
+
     private var layoutOverlayElements: List<com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement> = emptyList()
+
 
     @Volatile
     private var configurationReadyToStream: Boolean = false
 
+
     fun getStreamReadinessStatus(): Boolean = configurationReadyToStream
+
 
     @SuppressLint("MissingPermission")
     fun startStreamFromDevice(ledIntensityValues: IntArray) {
-        connection?.streamNIRDuinoData(ledIntensityValues)
+        connections.values.forEach {
+            it.streamNIRDuinoData(ledIntensityValues)
+        }
     }
+
 
     @SuppressLint("MissingPermission")
     fun getBatteryLevelFromDevice() {
-        connection?.requestDeviceForBatteryLevel()
+        connections.values.forEach {
+            it.requestDeviceForBatteryLevel()
+        }
     }
+
 
     @SuppressLint("MissingPermission")
     fun stopStreamingFromDevice() {
-        connection?.stopStreamNIRDuinoData()
+        connections.values.forEach {
+            it.stopStreamNIRDuinoData()
+        }
     }
 
-    fun getLatestSQIValues(): List<Float> {
-        return connection?.getLatestSignalRating() ?: emptyList()
+
+    fun getLatestSQIValues(): Map<String, List<Float>> {
+        return connections.mapValues { it.value.getLatestSignalRating()}
     }
+
 
     fun saveSessionNotes(sessionNotes: String){
-        connection?.dataProcessor?.sessionNotes = sessionNotes
+        connections.values.forEach {
+            it.dataProcessor.sessionNotes = sessionNotes
+        }
     }
 
+
     // Returns last round (optionally truncated to maxPoints)
-    fun getLatestfNIRSData(maxPoints: Int = Int.MAX_VALUE): List<DataRound> {
-        val rounds = connection?.dataProcessor?.roundWiseData ?: emptyList()
-        if (rounds.isEmpty()) return emptyList()
-        val last = rounds.last()
-        val n = last.timestamps.size
-        if (n == 0) {
-            return listOf(
+    fun getLatestfNIRSData(maxPoints: Int): Map<String, List<DataRound>> {
+
+
+        val result = mutableMapOf<String, List<DataRound>>()
+
+
+        connections.forEach { (mac, conn) ->
+
+
+            val rounds = conn.dataProcessor.roundWiseData
+            if (rounds.isEmpty()) return@forEach
+
+
+            val last = rounds.last()
+            val n = last.timestamps.size
+            val from = (n - maxPoints).coerceAtLeast(0)
+
+
+            val ts = last.timestamps.subList(from, n).toMutableList()
+            val red = last.redData.subList(from, n).map { it.toList() }.toMutableList()
+            val ir = last.irData.subList(from, n).map { it.toList() }.toMutableList()
+
+
+            result[mac] = listOf(
                 DataRound(
-                    timestamps = mutableListOf(),
-                    redData = mutableListOf(),
-                    irData = mutableListOf(),
+                    timestamps = ts,
+                    redData = red,
+                    irData = ir,
                     stimuli = last.stimuli.toMutableList()
                 )
             )
         }
-        val from = (n - maxPoints).coerceAtLeast(0)
-        val ts = last.timestamps.subList(from, n).toList()
-        val red = last.redData.subList(from, n).map { it.toList() }
-        val ir = last.irData.subList(from, n).map { it.toList() }
-        return listOf(
-            DataRound(
-                timestamps = ts.toMutableList(),
-                redData = red.toMutableList(),
-                irData = ir.toMutableList(),
-                stimuli = last.stimuli.toMutableList()
-            )
-        )
+
+
+        return result
     }
 
+
     fun getChannelDisplayData(): List<DisplayChannelData> {
-        connection?.dataProcessor?.extractfNIRSChannelDataUsingLayout()
-        return connection?.getChannelDisplayData() ?: emptyList()
+        val allData = mutableListOf<DisplayChannelData>()
+
+
+        connections.values.forEach { conn ->
+            conn.dataProcessor.extractfNIRSChannelDataUsingLayout()
+            allData.addAll(conn.getChannelDisplayData())
+        }
+
+
+        return allData
     }
+
 
     override fun onCreate() {
         super.onCreate()
@@ -110,14 +150,17 @@ class BLEConnectionManager : Service() {
         startForegroundService()
     }
 
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!hasRequiredPermissions()) {
             Log.e("BLEConnectionManager", "Missing required BLE permissions")
             return START_NOT_STICKY
         }
 
+
         val layoutJson = intent?.getStringExtra(EXTRA_LAYOUT_JSON)
         val alias = intent?.getStringExtra(EXTRA_DEVICE_ALIAS)
+
 
         if (!layoutJson.isNullOrBlank()) {
             layoutOverlayElements = try {
@@ -131,12 +174,18 @@ class BLEConnectionManager : Service() {
             }
         }
 
+
         when (intent?.getStringExtra(EXTRA_COMMAND)) {
             COMMAND_START -> {
-                if (!alias.isNullOrEmpty()) {
-                    loadSingleDeviceAlias(alias)
+
+
+                val aliases = intent.getStringArrayListExtra(EXTRA_DEVICE_ALIASES)
+
+
+                if (!aliases.isNullOrEmpty()) {
+                    loadDeviceAliases(aliases)
                 } else {
-                    Log.w("BLEConnectionManager", "No device alias provided with START command")
+                    Log.w("BLEConnectionManager", "No device aliases provided with START command")
                 }
             }
             COMMAND_STOP -> {
@@ -145,27 +194,35 @@ class BLEConnectionManager : Service() {
             else -> Log.w("BLEConnectionManager", "Unknown or missing command")
         }
 
+
         return START_STICKY
     }
 
+
     @SuppressLint("MissingPermission")
-    private fun loadSingleDeviceAlias(alias: String) {
+    private fun loadDeviceAliases(aliases: List<String>) {
         serviceHandler.post {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val deviceStore = KnownDeviceDataStore.getInstance(applicationContext)
                     val aliasToMacMap = deviceStore.getAllDeviceAliasesWithMac()
-                    val mac = aliasToMacMap[alias]
-                    if (mac == null) {
-                        Log.e("BLEConnectionManager", "Alias not found: $alias")
-                        return@launch
+
+
+                    for (alias in aliases) {
+                        val mac = aliasToMacMap[alias]
+                        if (mac == null) {
+                            Log.e("BLEConnectionManager", "Alias not found: $alias")
+                            return@launch
+                        } else {
+                            targetDevices[mac] = alias
+                        }
                     }
-                    // set single-target
-                    targetAlias = alias
-                    targetMac = mac
+
+
                     configurationReadyToStream = false
                     startBleScan()
-                    Log.d("BLEConnectionManager", "Started scan for alias: $alias, MAC: $mac")
+                    // alias in the code
+                    // Log.d("BLEConnectionManager", "Started scan for alias: $alias, MAC: $mac")
                 } catch (e: Exception) {
                     Log.e("BLEConnectionManager", "Failed to load alias", e)
                 }
@@ -173,22 +230,28 @@ class BLEConnectionManager : Service() {
         }
     }
 
+
     @SuppressLint("MissingPermission")
     override fun onDestroy() {
         super.onDestroy()
         stopBleScan()
-        connection?.disconnect()
-        connection = null
+        connections.values.forEach {
+            it.disconnect()
+        }
+        connections.clear()
         serviceThread.quitSafely()
         Log.d("BLEConnectionManager", "Service closed")
     }
 
+
     override fun onBind(intent: Intent?): IBinder? = null
+
 
     private fun hasRequiredPermissions(): Boolean {
         return ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
                 ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
     }
+
 
     private fun startForegroundService() {
         val channelId = "BLEConnectionManagerChannel"
@@ -200,14 +263,17 @@ class BLEConnectionManager : Service() {
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .createNotificationChannel(channel)
 
+
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("BLE Service Running")
             .setContentText("Managing BLE connection in background.")
             .setSmallIcon(R.drawable.ic_ble)
             .build()
 
+
         startForeground(1, notification)
     }
+
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_SCAN)
     private fun startBleScan() {
@@ -226,6 +292,7 @@ class BLEConnectionManager : Service() {
         Log.d("BLEConnectionManager", "BLE scan started")
     }
 
+
     @RequiresPermission(Manifest.permission.BLUETOOTH_SCAN)
     private fun stopBleScan() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
@@ -236,32 +303,49 @@ class BLEConnectionManager : Service() {
         Log.d("BLEConnectionManager", "BLE scan stopped")
     }
 
+
     private fun updateConfigurationReadiness() {
-        configurationReadyToStream = connection?.isConnected() == true
-        Log.d("BLEConnectionManager", "Configuration ready to stream: $configurationReadyToStream")
+
+
+        configurationReadyToStream =
+            connections.isNotEmpty() &&
+                    connections.values.all { it.isConnected() }
+
+
+        Log.d(
+            "BLEConnectionManager",
+            "Configuration ready to stream: $configurationReadyToStream"
+        )
     }
+
 
     private inner class BleScanCallback : ScanCallback() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val mac = result.device.address
-            val target = targetMac ?: return
-            if (mac != target) return
-            if (connection != null) return // already set
+            val alias = targetDevices[mac] ?: return
+            if (connections.containsKey(mac)) return // already set
 
-            if (ActivityCompat.checkSelfPermission(this@BLEConnectionManager, Manifest.permission.BLUETOOTH_CONNECT)
-                != PackageManager.PERMISSION_GRANTED
+
+            if (ActivityCompat.checkSelfPermission(
+                    this@BLEConnectionManager,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
             ) {
                 Log.e("BLEConnectionManager", "Missing BLUETOOTH_CONNECT permission for $mac")
                 return
             }
 
-            // Stop scanning once we find our target
-            stopBleScan()
 
-            val alias = targetAlias ?: mac
+            // Only stop scanning after finding all targets
+            if (connections.size == targetDevices.size) {
+                stopBleScan()
+            }
+
+
             val conn = BleDeviceConnection(applicationContext, result.device, alias, selectedLayoutName)
             conn.dataProcessor.layoutOverlayElements = layoutOverlayElements
+
 
             conn.onConnected = {
                 Log.d("BLEConnectionManager", "CONNECTED: $alias")
@@ -280,14 +364,25 @@ class BLEConnectionManager : Service() {
                 )
             }
 
-            connection = conn
-            connection?.connect()
+
+            connections[mac] = conn
+            conn.connect()
         }
+
 
         override fun onScanFailed(errorCode: Int) {
             Log.e("BLEConnectionManager", "BLE scan failed: $errorCode")
         }
+
+
+        // For testing just one device (test just first device in list)
+        private fun primaryConnection(): BleDeviceConnection? {
+            return connections.values.firstOrNull()
+        }
+
+
     }
+
 
     companion object {
         const val EXTRA_COMMAND = "command"
@@ -297,8 +392,11 @@ class BLEConnectionManager : Service() {
         const val EXTRA_DEVICE_ALIAS = "device_alias"
         const val EXTRA_LAYOUT_JSON = "layout_json"
 
+
         // keep global selected layout name
         var selectedLayoutName = "unknown"
+        const val EXTRA_DEVICE_ALIASES = "device_aliases"
+
 
         fun startService(
             context: Context,
@@ -317,11 +415,15 @@ class BLEConnectionManager : Service() {
             context.startForegroundService(intent)
         }
 
+
         private var connectionManagerInstance: BLEConnectionManager? = null
+
 
         fun stopService(context: Context, sessionNotes: String) {
 
+
             connectionManagerInstance?.saveSessionNotes(sessionNotes)
+
 
             val intent = Intent(context, BLEConnectionManager::class.java).apply {
                 putExtra(EXTRA_COMMAND, COMMAND_STOP)
@@ -329,78 +431,152 @@ class BLEConnectionManager : Service() {
             context.startService(intent)
         }
 
+
         fun registerInstance(instance: BLEConnectionManager) {
             connectionManagerInstance = instance
         }
 
+
         fun getStreamReadinessStatus(): Boolean =
             connectionManagerInstance?.getStreamReadinessStatus() ?: false
+
 
         fun startStreamFromDevice(ledIntensityValues: IntArray, layoutName: String) {
             selectedLayoutName = layoutName
             connectionManagerInstance?.startStreamFromDevice(ledIntensityValues)
         }
 
+
         fun getDeviceBatteryLevel() {
             connectionManagerInstance?.getBatteryLevelFromDevice()
         }
+
 
         fun stopStreamingFromDevice() {
             connectionManagerInstance?.stopStreamingFromDevice()
         }
 
+
         fun broadcastStimulusEvent(event: StimulusEvent) {
-            connectionManagerInstance?.connection?.logStimulusEvent(event)
+            connectionManagerInstance?.connections?.values?.forEach {
+                it.logStimulusEvent(event)
+            }
         }
 
+
         fun getLatestSQIValues(): List<Float> =
-            connectionManagerInstance?.getLatestSQIValues() ?: emptyList()
+            connectionManagerInstance?.connections?.values?.firstOrNull()?.getLatestSignalRating()?: emptyList()
+
 
         fun getChannelDisplayData(): List<DisplayChannelData> =
             connectionManagerInstance?.getChannelDisplayData() ?: emptyList()
+
 
         fun setLayoutName(layoutName: String) {
             selectedLayoutName = layoutName
         }
 
+
         fun getLatestfNIRSData(maxPoints: Int): List<DataRound> =
-            connectionManagerInstance?.getLatestfNIRSData(maxPoints) ?: emptyList()
+            connectionManagerInstance
+                ?.connections
+                ?.values
+                ?.firstOrNull()
+                ?.let { conn ->
+                    val rounds = conn.dataProcessor.roundWiseData
+                    if (rounds.isEmpty()) return emptyList()
+
+
+                    val last = rounds.last()
+                    val n = last.timestamps.size
+                    val from = (n - maxPoints).coerceAtLeast(0)
+
+
+                    listOf(
+                        DataRound(
+                            timestamps = last.timestamps.subList(from, n).toMutableList(),
+                            redData = last.redData.subList(from, n).map { it.toList() }.toMutableList(),
+                            irData = last.irData.subList(from, n).map { it.toList() }.toMutableList(),
+                            stimuli = last.stimuli.toMutableList()
+                        )
+                    )
+                }
+                ?: emptyList()
+
 
         fun hardResetTimer() {
-            connectionManagerInstance?.connection?.resetTimeStamps()
+            connectionManagerInstance?.connections?.values?.forEach{it.resetTimeStamps()}
         }
+
 
         @SuppressLint("MissingPermission")
         fun requestConnectionSignalLevel() {
-            connectionManagerInstance?.connection?.requestCurrentRSSI()
+            connectionManagerInstance?.connections?.values?.forEach{it.requestCurrentRSSI()}
         }
+
 
         fun readLatestSignalLevel(): Int =
-            connectionManagerInstance?.connection?.connectionRSSI ?: 0
+            connectionManagerInstance
+                ?.connections
+                ?.values
+                ?.firstOrNull()
+                ?.connectionRSSI
+                ?: 0
+
 
         fun readLatestBatteryLevel(): Int =
-            connectionManagerInstance?.connection?.deviceBatteryLevel ?: 0
+            connectionManagerInstance
+                ?.connections
+                ?.values
+                ?.firstOrNull()
+                ?.deviceBatteryLevel
+                ?: 0
+
 
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-        fun requestAutomaticLEDAdjustment(channelCoords : List<DisplayChannelData>){
-            connectionManagerInstance?.connection?.dataProcessor?.ledsAutoAdjusted = false
-            connectionManagerInstance?.connection?.requestAutosetLEDs(channelCoords)
+        fun requestAutomaticLEDAdjustment(channelCoords: List<DisplayChannelData>) {
+
+
+            connectionManagerInstance
+                ?.connections
+                ?.values
+                ?.forEach { conn ->
+                    conn.dataProcessor.ledsAutoAdjusted = false
+                    conn.requestAutosetLEDs(channelCoords)
+                }
         }
+
 
         fun checkIfLEDsAdjusted(): Boolean? {
-            return connectionManagerInstance?.connection?.dataProcessor?.ledsAutoAdjusted
+            return connectionManagerInstance
+                ?.connections
+                ?.values
+                ?.all { it.dataProcessor.ledsAutoAdjusted }
         }
+
 
         fun getLatestIntensityValues(): IntArray? {
-            return connectionManagerInstance?.connection?.dataProcessor?.ledIntensityValues
+            return connectionManagerInstance
+                ?.connections
+                ?.values
+                ?.firstOrNull()
+                ?.dataProcessor
+                ?.ledIntensityValues
         }
 
+
         fun setPresetStimulusLabels(labels: List<String>) {
+
+
             connectionManagerInstance
-                ?.connection
-                ?.dataProcessor
-                ?.presetStimulusLabels = labels
+                ?.connections
+                ?.values
+                ?.forEach { conn ->
+                    conn.dataProcessor.presetStimulusLabels = labels
+                }
         }
+
 
     }
 }
+
