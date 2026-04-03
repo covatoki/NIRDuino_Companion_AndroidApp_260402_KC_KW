@@ -679,12 +679,17 @@ class StreamfNIRSData : AppCompatActivity() {
                         BLEConnectionManager.getLatestSQIValues().values.firstOrNull()
                     else null
 
-                val fNIRS = BLEConnectionManager.getLatestfNIRSData(maxPoints).values.firstOrNull() ?: emptyList()
+                val rawMap = BLEConnectionManager.getLatestfNIRSData(maxPoints)
+                Log.d("DATA_POLL", "map keys=${rawMap.keys} sizes=${rawMap.values.map{it.size}}")
+
+                val fNIRS = rawMap.values.firstOrNull() ?: emptyList()
+                Log.d("DATA_POLL", "fNIRS rounds=${fNIRS.size}  coords=${snapshotCoords.size}  idx=$snapshotIndex")
+
                 val batteryLevel = BLEConnectionManager.readLatestBatteryLevel()
                 val rssiLevel    = BLEConnectionManager.readLatestSignalLevel()
 
                 // -------------------------------------------------------
-                // 2️⃣  PROCESS fNIRS DATA (BACKGROUND THREAD)
+                // 2⃣  PROCESS fNIRS DATA (BACKGROUND THREAD)
                 // -------------------------------------------------------
                 var latestTimestamp = 0.0
                 var redPoint = 0f
@@ -695,10 +700,12 @@ class StreamfNIRSData : AppCompatActivity() {
                         && snapshotIndex in snapshotCoords.indices) {
 
                         val lastRound = fNIRS.last()
+                        Log.d("DATA_POLL", "lastRound ts=${lastRound.timestamps.size}  red=${lastRound.redData.size}  ir=${lastRound.irData.size}")
                         latestTimestamp = lastRound.timestamps.last().toDouble()
 
                         val ch   = snapshotCoords[snapshotIndex]
                         val chId = ch.channelNumber
+                        Log.d("DATA_POLL", "chId=$chId  redVecSize=${lastRound.redData.lastOrNull()?.size}")
 
                         val latestRedVector = lastRound.redData.last()
                         val latestIrVector  = lastRound.irData.last()
@@ -706,6 +713,7 @@ class StreamfNIRSData : AppCompatActivity() {
                         if (chId in latestRedVector.indices && chId in latestIrVector.indices) {
                             redPoint = latestRedVector[chId].toFloat()
                             irPoint  = latestIrVector[chId].toFloat()
+                            Log.d("DATA_POLL", "red=$redPoint  ir=$irPoint  tsBufferSize=${tsBuffer.size}")
 
                             // Rolling buffers (BACKGROUND)
                             tsBuffer.add(latestTimestamp.toFloat())
@@ -718,11 +726,32 @@ class StreamfNIRSData : AppCompatActivity() {
                         } else {
                             Log.w("DATA_POLL", "chId=$chId out of range (redVec=${latestRedVector.size})")
                         }
-                    } else if (snapshotCoords.isEmpty()) {
-                        Log.d("DATA_POLL", "channelCoords not ready yet, skipping frame")
+                    } else if (snapshotCoords.isEmpty() && fNIRS.isNotEmpty()) {
+                        // channelCoords not ready yet — try to populate it now from the service
+                        Log.d("DATA_POLL", "channelCoords empty, attempting to populate from service...")
+                        withContext(Dispatchers.Main) {
+                            val freshCoords = BLEConnectionManager.getChannelDisplayData()
+                            if (freshCoords.isNotEmpty()) {
+                                channelCoords = freshCoords
+                                Log.d("DATA_POLL", "channelCoords populated: ${freshCoords.size} channels")
+                                // Also refresh the channel spinner labels
+                                val channelLabels = freshCoords.map {
+                                    "Ch ${it.channelNumber + 1} (${it.type}) S${it.sourceId}:D${it.detectorId}"
+                                }
+                                channelSpinner.adapter = ArrayAdapter(
+                                    this@StreamfNIRSData,
+                                    android.R.layout.simple_spinner_dropdown_item,
+                                    channelLabels
+                                )
+                            } else {
+                                Log.d("DATA_POLL", "channelCoords still empty from service, will retry next poll")
+                            }
+                        }
+                    } else {
+                        Log.w("DATA_POLL", "SKIP fNIRS.isEmpty=${fNIRS.isEmpty()}  coords.isEmpty=${snapshotCoords.isEmpty()}  idxValid=${snapshotIndex in snapshotCoords.indices}")
                     }
                 } catch (e: Exception) {
-                    Log.e("DATA_POLL", "Error processing fNIRS: $e")
+                    Log.e("DATA_POLL", "Error processing fNIRS: $e", e)
                 }
 
                 // -------------------------------------------------------
