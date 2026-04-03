@@ -34,6 +34,8 @@ class LayoutStudioAdapter(
     private val onItemChangedListener: LayoutStudio.OnLayoutItemChangedListener
 ) : RecyclerView.Adapter<LayoutStudioAdapter.ViewHolder>() {
 
+    private val selectedItems = mutableSetOf<Int>() // store positions
+
     private val cachedOverlayMap = mutableMapOf<String, List<OverlayElement>>()
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -74,6 +76,25 @@ class LayoutStudioAdapter(
 
     override fun getItemCount() = items.size
 
+    private fun toggleSelection(position: Int) {
+        if (selectedItems.contains(position)) {
+            selectedItems.remove(position)
+        } else {
+            selectedItems.add(position)
+        }
+        notifyItemChanged(position)
+    }
+
+    fun selectAll() {
+        selectedItems.clear()
+        selectedItems.addAll(items.indices)
+        notifyDataSetChanged()
+    }
+
+    fun getSelectedItems(): List<LayoutStudioItem> {
+        return selectedItems.map { items[it] }
+    }
+
     override fun onBindViewHolder(holder: ViewHolder, @SuppressLint("RecyclerView") position: Int) {
 
         if (position >= items.size || position < 0) {
@@ -87,6 +108,23 @@ class LayoutStudioAdapter(
         dateFormat.timeZone = timeZone
         val formattedDate = dateFormat.format(Date(item.lastUpdated))
         holder.lastUpdatedDateText.text = "Last updated: $formattedDate"
+
+        holder.itemView.setOnLongClickListener {
+            toggleSelection(position)
+            true
+        }
+
+        holder.itemView.setOnClickListener {
+            if (selectedItems.isNotEmpty()) {
+                toggleSelection(position)
+            }
+        }
+
+        if (selectedItems.contains(position)) {
+            holder.itemView.setBackgroundColor(0xFFE0E0E0.toInt()) // light gray
+        } else {
+            holder.itemView.setBackgroundColor(0x00000000) // transparent
+        }
 
         if (!cachedOverlayMap.containsKey(item.layoutName)) {
             CoroutineScope(Dispatchers.IO).launch {
