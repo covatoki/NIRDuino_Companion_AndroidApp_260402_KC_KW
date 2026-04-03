@@ -667,10 +667,10 @@ class StreamfNIRSData : AppCompatActivity() {
                 // -------------------------------------------------------
                 val sqiValues =
                     if (now - lastSQIUpdateTime > SQI_UPDATE_INTERVAL_MS)
-                        BLEConnectionManager.getLatestSQIValues()
+                        BLEConnectionManager.getLatestSQIValues().values.firstOrNull()
                     else null
 
-                val fNIRS = BLEConnectionManager.getLatestfNIRSData(maxPoints)
+                val fNIRS = BLEConnectionManager.getLatestfNIRSData(maxPoints).values.firstOrNull() ?: emptyList()
                 val batteryLevel = BLEConnectionManager.readLatestBatteryLevel()
                 val rssiLevel    = BLEConnectionManager.readLatestSignalLevel()
 
@@ -1008,9 +1008,9 @@ class StreamfNIRSData : AppCompatActivity() {
 
             BLEConnectionManager.startService(
                 this@StreamfNIRSData,
-                alias = alias,
+                aliases = listOf(alias),
                 layoutJson = layoutJson,
-                layoutName = selectedLayoutName!!   // ✅ pass it
+                layoutName = selectedLayoutName!!
             )
 
             // Prevent user from changing the device in use
