@@ -663,6 +663,15 @@ class StreamfNIRSData : AppCompatActivity() {
                 val now = System.currentTimeMillis()
 
                 // -------------------------------------------------------
+                // 0️⃣  SNAPSHOT UI-OWNED STATE ON THE MAIN THREAD FIRST
+                //      channelCoords and currentChannelSpinnerIndex are
+                //      written on the main thread — read them there safely.
+                // -------------------------------------------------------
+                val (snapshotCoords, snapshotIndex) = withContext(Dispatchers.Main) {
+                    Pair(channelCoords.toList(), currentChannelSpinnerIndex)
+                }
+
+                // -------------------------------------------------------
                 // 1️⃣  FETCH RAW DATA FROM BLE SERVICE (NON-UI THREAD)
                 // -------------------------------------------------------
                 val sqiValues =
@@ -682,27 +691,35 @@ class StreamfNIRSData : AppCompatActivity() {
                 var irPoint  = 0f
 
                 try {
-                    if (fNIRS.isNotEmpty()) {
+                    if (fNIRS.isNotEmpty() && snapshotCoords.isNotEmpty()
+                        && snapshotIndex in snapshotCoords.indices) {
+
                         val lastRound = fNIRS.last()
                         latestTimestamp = lastRound.timestamps.last().toDouble()
 
-                        val ch = channelCoords[currentChannelSpinnerIndex]
+                        val ch   = snapshotCoords[snapshotIndex]
                         val chId = ch.channelNumber
 
                         val latestRedVector = lastRound.redData.last()
                         val latestIrVector  = lastRound.irData.last()
 
-                        redPoint = latestRedVector[chId].toFloat()
-                        irPoint  = latestIrVector[chId].toFloat()
+                        if (chId in latestRedVector.indices && chId in latestIrVector.indices) {
+                            redPoint = latestRedVector[chId].toFloat()
+                            irPoint  = latestIrVector[chId].toFloat()
 
-                        // Rolling buffers (BACKGROUND)
-                        tsBuffer.add(latestTimestamp.toFloat())
-                        redBuffer.add(redPoint)
-                        irBuffer.add(irPoint)
+                            // Rolling buffers (BACKGROUND)
+                            tsBuffer.add(latestTimestamp.toFloat())
+                            redBuffer.add(redPoint)
+                            irBuffer.add(irPoint)
 
-                        while (tsBuffer.size > maxPoints) tsBuffer.removeFirst()
-                        while (redBuffer.size > maxPoints) redBuffer.removeFirst()
-                        while (irBuffer.size > maxPoints) irBuffer.removeFirst()
+                            while (tsBuffer.size > maxPoints) tsBuffer.removeFirst()
+                            while (redBuffer.size > maxPoints) redBuffer.removeFirst()
+                            while (irBuffer.size > maxPoints) irBuffer.removeFirst()
+                        } else {
+                            Log.w("DATA_POLL", "chId=$chId out of range (redVec=${latestRedVector.size})")
+                        }
+                    } else if (snapshotCoords.isEmpty()) {
+                        Log.d("DATA_POLL", "channelCoords not ready yet, skipping frame")
                     }
                 } catch (e: Exception) {
                     Log.e("DATA_POLL", "Error processing fNIRS: $e")
