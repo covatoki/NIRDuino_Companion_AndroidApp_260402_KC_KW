@@ -18,7 +18,7 @@ import com.example.nirduino_android_app_v2.device_communication_management.Chann
 class BleDeviceConnection(
     private val context: Context,
     private val device: BluetoothDevice,
-    private val alias: String,
+    val alias: String,
     val selectedLayoutName: String
 ) {
     private var bluetoothGatt: BluetoothGatt? = null
