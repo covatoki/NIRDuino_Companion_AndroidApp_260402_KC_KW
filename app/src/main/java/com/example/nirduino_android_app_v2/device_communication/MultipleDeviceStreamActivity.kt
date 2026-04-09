@@ -200,6 +200,7 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
                 layoutJson = layoutJson,
                 layoutName = selectedLayoutName!!
             )
+            BLEConnectionManager.setLayoutElements(overlays)
 
             inflateDeviceCards(aliases)
             waitForAllConnections(aliases)

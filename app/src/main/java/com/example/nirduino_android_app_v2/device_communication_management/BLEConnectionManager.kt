@@ -96,6 +96,7 @@ class BLEConnectionManager : Service() {
 
         connections.forEach { (mac, conn) ->
             val rounds = conn.dataProcessor.roundWiseData
+            Log.d("DATA_DEBUG", "MAC=$mac alias=${conn.alias} rounds=${rounds.size}")
             if (rounds.isEmpty()) return@forEach
 
             val last = rounds.last()
@@ -123,6 +124,14 @@ class BLEConnectionManager : Service() {
             allData.addAll(conn.getChannelDisplayData())
         }
         return allData
+    }
+
+    fun setLayoutElements(elements: List<com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement>) {
+        layoutOverlayElements = elements
+        connections.values.forEach { conn ->
+            conn.dataProcessor.layoutOverlayElements = elements
+        }
+        Log.d("BLEConnectionManager", "Layout overlay elements set directly: ${elements.size}")
     }
 
 
@@ -304,6 +313,7 @@ class BLEConnectionManager : Service() {
 
             val conn = BleDeviceConnection(applicationContext, result.device, alias, selectedLayoutName)
             conn.dataProcessor.layoutOverlayElements = layoutOverlayElements
+            Log.d("BLEConnectionManager", "Layout elements loaded: ${layoutOverlayElements.size} for $alias")
 
             conn.onConnected = {
                 Log.d("BLEConnectionManager", "CONNECTED: $alias")
@@ -434,6 +444,10 @@ class BLEConnectionManager : Service() {
 
         fun setLayoutName(layoutName: String) {
             selectedLayoutName = layoutName
+        }
+
+        fun setLayoutElements(elements: List<com.example.nirduino_android_app_v2.layout_studio_files.OverlayElement>) {
+            connectionManagerInstance?.setLayoutElements(elements)
         }
 
 
