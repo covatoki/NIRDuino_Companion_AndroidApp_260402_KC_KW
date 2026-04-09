@@ -54,6 +54,9 @@
         <activity
             android:name=".device_communication.StreamfNIRSData"
             android:exported="false" />
+        <activity
+            android:name=".device_communication.MultiDeviceStreamActivity"
+            android:exported="false" />
         <activity android:name=".run_experiement.ExperimentActivity"
             android:exported="false"/>
 

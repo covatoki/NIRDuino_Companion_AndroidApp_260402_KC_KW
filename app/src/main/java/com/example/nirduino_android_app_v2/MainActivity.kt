@@ -18,6 +18,7 @@ import com.example.nirduino_android_app_v2.device_communication.StreamfNIRSData
 import com.example.nirduino_android_app_v2.participant_manager.ParticipantManager
 import com.example.nirduino_android_app_v2.run_experiement.ExperimentActivity
 import com.example.nirduino_android_app_v2.util.AppPermissionHelper
+import com.example.nirduino_android_app_v2.device_communication.MultiDeviceStreamActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -70,6 +71,7 @@ class MainActivity : AppCompatActivity() {
             ActivitySelectorCard("Stream fNIRS data", R.drawable.ic_line_plot, StreamfNIRSData::class.java),
             ActivitySelectorCard("Run experiments", R.drawable.ic_play, ExperimentActivity::class.java),
             ActivitySelectorCard("Convert to SNIRF", R.drawable.ic_converter, SNIRFConverter::class.java),
+            ActivitySelectorCard("Multi-device stream", R.drawable.ic_line_plot, MultiDeviceStreamActivity::class.java),
 //            ActivitySelectorCard("Get information", R.drawable.ic_tutorials, Tutorials::class.java)
         )
 

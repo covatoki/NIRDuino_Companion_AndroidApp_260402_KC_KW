@@ -1,0 +1,65 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select Layout"
+            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+        <Spinner
+            android:id="@+id/spinner_layouts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select Devices"
+            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+        <LinearLayout
+            android:id="@+id/container_device_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="16dp" />
+
+        <Button
+            android:id="@+id/btn_connect_all"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Connect All"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btn_stream_toggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Start Streaming"
+            android:enabled="false"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/text_global_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Not connected"
+            android:layout_marginBottom="16dp" />
+
+        <LinearLayout
+            android:id="@+id/container_device_cards"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+    </LinearLayout>
+</ScrollView>
