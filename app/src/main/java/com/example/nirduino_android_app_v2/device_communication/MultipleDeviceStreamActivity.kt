@@ -19,6 +19,7 @@ import com.example.nirduino_android_app_v2.device_manager_files.KnownDeviceDataS
 import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
 import com.google.gson.Gson
 import kotlinx.coroutines.*
+import com.example.nirduino_android_app_v2.device_communication.ChannelPlotView
 
 /**
  * MultiDeviceStreamActivity
@@ -266,15 +267,18 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         deviceCardViews.clear()
 
         for (alias in aliases) {
-            // Inflate item_device_status_card.xml (create this simple layout)
             val card = LayoutInflater.from(this)
                 .inflate(R.layout.item_device_status_card, deviceCardContainer, false)
 
-            card.findViewById<TextView>(R.id.text_device_alias).text   = alias
-            card.findViewById<TextView>(R.id.text_device_status).text  = "Connecting…"
-            card.findViewById<TextView>(R.id.text_device_rssi).text    = "RSSI: —"
-            card.findViewById<TextView>(R.id.text_device_battery).text = "Battery: —"
+            card.findViewById<TextView>(R.id.text_device_alias).text    = alias
+            card.findViewById<TextView>(R.id.text_device_status).text   = "Connecting…"
+            card.findViewById<TextView>(R.id.text_device_rssi).text     = "RSSI: —"
+            card.findViewById<TextView>(R.id.text_device_battery).text  = "Battery: —"
             card.findViewById<TextView>(R.id.text_device_datarate).text = "Data: —"
+
+            // Plot starts blank — data arrives once streaming begins
+            val plot = card.findViewById<ChannelPlotView>(R.id.channel_plot_view)
+            plot.windowSeconds = 10f
 
             deviceCardContainer.addView(card)
             deviceCardViews[alias] = card
@@ -404,43 +408,56 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
     }
 
     private fun refreshDeviceCards() {
-        val statuses  = BLEConnectionManager.getConnectionStatuses()   // alias → connected
-        val rssiMap   = BLEConnectionManager.readLatestSignalLevels()   // alias → dBm
-        val battMap   = BLEConnectionManager.readLatestBatteryLevels()  // alias → %
+        val statuses = BLEConnectionManager.getConnectionStatuses()
+        val rssiMap  = BLEConnectionManager.readLatestSignalLevels()
+        val battMap  = BLEConnectionManager.readLatestBatteryLevels()
+        val dataMap  = BLEConnectionManager.getLatestfNIRSData(maxPoints = 90)
 
         for ((alias, card) in deviceCardViews) {
+            // Connection status
             val connected = statuses[alias] ?: false
             updateCardStatus(alias, connected)
 
+            // RSSI
             val rssi = rssiMap[alias]
-            if (rssi != null && rssi != 0) {
+            if (rssi != null && rssi != 0)
                 card.findViewById<TextView>(R.id.text_device_rssi).text = "RSSI: $rssi dBm"
-            }
 
+            // Battery
             val batt = battMap[alias]
-            if (batt != null && batt > 0) {
+            if (batt != null && batt > 0)
                 card.findViewById<TextView>(R.id.text_device_battery).text = "Battery: $batt%"
+
+            // Plot — find the data entry whose key (MAC) maps to this alias
+            // dataMap is keyed by MAC; we match by looking at connection statuses
+            // which are keyed by alias. We find the MAC by cross-referencing.
+            val matchingEntry = dataMap.entries.firstOrNull { (_, rounds) ->
+                rounds.isNotEmpty()
             }
 
-            // Data rate: count samples in the latest round for this device
-            // We use getLatestfNIRSData(1) keyed by MAC; we need alias→MAC lookup.
-            // For simplicity we log the sample count from the last known round.
-            val dataMap = BLEConnectionManager.getLatestfNIRSData(maxPoints = 1)
-            // dataMap is keyed by MAC address; find the matching connection
-            // BLEConnectionManager exposes getConnectionStatuses() keyed by alias,
-            // so we piggyback on that to find the correct entry by cross-referencing.
-            // (A future refactor could expose alias-keyed data directly.)
-            val roundEntry = dataMap.entries.firstOrNull()  // multi-device: iterate all
-            val sampleCount = roundEntry?.value?.firstOrNull()?.timestamps?.size ?: 0
-            if (isStreaming) {
+            val round = matchingEntry?.value?.lastOrNull()
+            if (round != null && round.timestamps.isNotEmpty() && isStreaming) {
+                val plot = card.findViewById<ChannelPlotView>(R.id.channel_plot_view)
+
+                // Get which channel this card's spinner is on
+                val spinner = card.findViewById<Spinner>(R.id.spinner_channels)
+                val channelIndex = spinner.selectedItemPosition.coerceAtLeast(0)
+
+                // Pull red and IR for that channel across all timestamps
+                val redSeries = round.redData.map { sample ->
+                    if (channelIndex < sample.size) sample[channelIndex] else 0f
+                }
+                val irSeries = round.irData.map { sample ->
+                    if (channelIndex < sample.size) sample[channelIndex] else 0f
+                }
+
+                plot.updateData(round.timestamps, redSeries, irSeries)
+
                 card.findViewById<TextView>(R.id.text_device_datarate).text =
-                    "Samples (last round): $sampleCount"
+                    "Samples: ${round.timestamps.size}"
             }
-
-            Log.v(TAG, "[$alias] connected=$connected rssi=${rssiMap[alias]} batt=${battMap[alias]}")
         }
     }
-
     private fun updateCardStatus(alias: String, connected: Boolean) {
         val card = deviceCardViews[alias] ?: return
         val statusText = card.findViewById<TextView>(R.id.text_device_status)

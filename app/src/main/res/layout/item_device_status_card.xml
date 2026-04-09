@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
+    android:layout_marginBottom="16dp"
     app:cardCornerRadius="8dp"
     app:cardElevation="4dp">
 
@@ -43,6 +43,35 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Data: —" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Channel:"
+                android:layout_marginEnd="8dp" />
+
+            <Spinner
+                android:id="@+id/spinner_channels"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:spinnerMode="dropdown" />
+
+        </LinearLayout>
+
+        <com.example.nirduino_android_app_v2.device_communication.ChannelPlotView
+            android:id="@+id/channel_plot_view"
+            android:layout_width="match_parent"
+            android:layout_height="250dp"
+            android:background="@color/white"
+            android:layout_marginTop="8dp" />
 
     </LinearLayout>
 </androidx.cardview.widget.CardView>
