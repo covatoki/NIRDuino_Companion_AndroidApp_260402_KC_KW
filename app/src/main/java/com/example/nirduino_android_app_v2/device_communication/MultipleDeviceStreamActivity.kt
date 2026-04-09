@@ -14,60 +14,21 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.nirduino_android_app_v2.R
 import com.example.nirduino_android_app_v2.device_communication_management.BLEConnectionManager
+import com.example.nirduino_android_app_v2.device_communication_management.DisplayChannelData
 import com.example.nirduino_android_app_v2.device_communication_management.StimulusEvent
 import com.example.nirduino_android_app_v2.device_manager_files.KnownDeviceDataStore
 import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
 import com.google.gson.Gson
 import kotlinx.coroutines.*
-import com.example.nirduino_android_app_v2.device_communication.ChannelPlotView
 
-/**
- * MultiDeviceStreamActivity
- *
- * Replaces the single-alias flow in StreamfNIRSData for sessions that need
- * more than one NIRDuino device running in parallel.
- *
- * HOW IT WORKS
- * ─────────────
- * 1. The user picks a layout (shared across all devices – same montage).
- * 2. The user checks one or more aliases from the list of known devices.
- * 3. "Connect All" fires BLEConnectionManager.startService() with the full
- *    alias list.  The manager's existing Map<String, BleDeviceConnection>
- *    handles each device independently.
- * 4. A per-device status card is inflated for each alias so the user can
- *    watch connection state, RSSI, battery, and data rate independently.
- * 5. "Start / Stop Streaming" and stimulus events are broadcast to all
- *    connected devices via the existing BLEConnectionManager static helpers.
- *
- * LAYOUT FILE  (activity_multi_device_stream.xml)
- * ────────────────────────────────────────────────
- * You need to create a matching XML layout.  The required view IDs are:
- *
- *   spinner_layouts          – Spinner    (layout picker)
- *   container_device_list    – LinearLayout (alias checkboxes added at runtime)
- *   btn_connect_all          – Button
- *   btn_stream_toggle        – Button
- *   container_device_cards   – LinearLayout (status cards added at runtime)
- *   text_global_status       – TextView
- *
- * Each device card is inflated from  item_device_status_card.xml  which must
- * expose:
- *   text_device_alias        – TextView
- *   text_device_status       – TextView   (Connected / Connecting / Disconnected)
- *   text_device_rssi         – TextView
- *   text_device_battery      – TextView
- *   text_device_datarate     – TextView   (packets / s)
- *
- * See the logcat guide for how to verify everything is working.
- */
 class MultiDeviceStreamActivity : AppCompatActivity() {
 
     // ── UI references ─────────────────────────────────────────────────────
     private lateinit var layoutSpinner: Spinner
-    private lateinit var deviceListContainer: LinearLayout   // checkboxes
+    private lateinit var deviceListContainer: LinearLayout
     private lateinit var connectAllButton: Button
     private lateinit var streamToggleButton: Button
-    private lateinit var deviceCardContainer: LinearLayout   // status cards
+    private lateinit var deviceCardContainer: LinearLayout
     private lateinit var globalStatusText: TextView
 
     // ── Data stores ───────────────────────────────────────────────────────
@@ -76,19 +37,30 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
 
     // ── State ─────────────────────────────────────────────────────────────
     private var selectedLayoutName: String? = null
-    private val allKnownAliases = mutableListOf<String>()
-    private val checkedAliases = mutableSetOf<String>()   // which boxes the user ticked
-
+    private val checkedAliases = mutableSetOf<String>()
     private var isConnected = false
     private var isStreaming = false
 
-    /** Map alias → card root view for fast updates */
+    // alias → card root view
     private val deviceCardViews = mutableMapOf<String, View>()
 
-    /** Coroutine job that polls BLEConnectionManager every 500 ms */
+    // alias → channel coords loaded from the service
+    private val deviceChannelCoords = mutableMapOf<String, List<DisplayChannelData>>()
+
+    // alias → rolling plot buffers
+    private val deviceTsBuffers  = mutableMapOf<String, ArrayDeque<Float>>()
+    private val deviceRedBuffers = mutableMapOf<String, ArrayDeque<Float>>()
+    private val deviceIrBuffers  = mutableMapOf<String, ArrayDeque<Float>>()
+
+    // alias → which spinner index is currently selected
+    private val deviceSpinnerIndex = mutableMapOf<String, Int>()
+
     private var pollingJob: Job? = null
 
-    // ── LED intensity defaults (matches StreamfNIRSData) ──────────────────
+    private val maxPoints = 90
+    private val PLOT_UPDATE_INTERVAL_MS = 200L
+    private var lastPlotUpdateTime = 0L
+
     private val ledIntensityValues = intArrayOf(
         1,
         255, 255, 255, 255,
@@ -108,9 +80,16 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_multi_device_stream)   // ← create this XML
+        setContentView(R.layout.activity_multi_device_stream)
 
-        bindViews()
+        layoutSpinner       = findViewById(R.id.spinner_layouts)
+        deviceListContainer = findViewById(R.id.container_device_list)
+        connectAllButton    = findViewById(R.id.btn_connect_all)
+        streamToggleButton  = findViewById(R.id.btn_stream_toggle)
+        deviceCardContainer = findViewById(R.id.container_device_cards)
+        globalStatusText    = findViewById(R.id.text_global_status)
+
+        streamToggleButton.isEnabled = false
 
         knownDeviceStore = KnownDeviceDataStore.getInstance(applicationContext)
         layoutDataStore  = LayoutDataStore.getInstance(applicationContext)
@@ -129,23 +108,7 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         pollingJob?.cancel()
         if (isConnected) {
             BLEConnectionManager.stopService(this, "MultiDeviceStreamActivity destroyed")
-            Log.i(TAG, "BLE service stopped on activity destroy")
         }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // View binding
-    // ─────────────────────────────────────────────────────────────────────
-
-    private fun bindViews() {
-        layoutSpinner       = findViewById(R.id.spinner_layouts)
-        deviceListContainer = findViewById(R.id.container_device_list)
-        connectAllButton    = findViewById(R.id.btn_connect_all)
-        streamToggleButton  = findViewById(R.id.btn_stream_toggle)
-        deviceCardContainer = findViewById(R.id.container_device_cards)
-        globalStatusText    = findViewById(R.id.text_global_status)
-
-        streamToggleButton.isEnabled = false
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -156,23 +119,20 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         val layoutMap   = layoutDataStore.getAllLayoutsByName()
         val layoutNames = layoutMap.keys.toList()
 
-        val adapter = ArrayAdapter(
+        layoutSpinner.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_dropdown_item,
             layoutNames
         )
-        layoutSpinner.adapter = adapter
 
         layoutSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 selectedLayoutName = layoutNames[position]
                 BLEConnectionManager.setLayoutName(selectedLayoutName!!)
-                Log.d(TAG, "Layout selected: $selectedLayoutName")
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Pre-select first layout
         if (layoutNames.isNotEmpty()) {
             selectedLayoutName = layoutNames[0]
             BLEConnectionManager.setLayoutName(selectedLayoutName!!)
@@ -185,25 +145,18 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
 
     private suspend fun loadDeviceCheckboxes() {
         val aliasToMac = knownDeviceStore.getAllDeviceAliasesWithMac()
-        allKnownAliases.clear()
-        allKnownAliases.addAll(aliasToMac.keys)
-
         deviceListContainer.removeAllViews()
 
-        if (allKnownAliases.isEmpty()) {
-            val empty = TextView(this).apply { text = "No saved devices found." }
-            deviceListContainer.addView(empty)
+        if (aliasToMac.isEmpty()) {
+            deviceListContainer.addView(TextView(this).apply { text = "No saved devices found." })
             return
         }
 
-        for (alias in allKnownAliases) {
+        for (alias in aliasToMac.keys) {
             val cb = CheckBox(this).apply {
-                text  = alias
-                tag   = alias
+                text = alias
                 setOnCheckedChangeListener { _, checked ->
-                    if (checked) checkedAliases.add(alias)
-                    else checkedAliases.remove(alias)
-                    Log.d(TAG, "Selection changed → checked: $checkedAliases")
+                    if (checked) checkedAliases.add(alias) else checkedAliases.remove(alias)
                 }
             }
             deviceListContainer.addView(cb)
@@ -216,10 +169,7 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     private fun onConnectAllClicked() {
-        if (isConnected) {
-            disconnectAll()
-            return
-        }
+        if (isConnected) { disconnectAll(); return }
 
         val aliases = checkedAliases.toList()
         if (aliases.isEmpty()) {
@@ -231,24 +181,19 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
             return
         }
         if (!isBluetoothEnabled()) {
-            showErrorDialog("Bluetooth is disabled. Please enable it and try again.")
+            showErrorDialog("Bluetooth is disabled.")
             return
         }
 
-        // Lock UI during connection
-        layoutSpinner.isEnabled   = false
-        layoutSpinner.alpha       = 0.75f
-        deviceListContainer.isEnabled = false
-        connectAllButton.isEnabled    = false
-
-        globalStatusText.text = "Connecting to ${aliases.size} device(s)…"
-        Log.i(TAG, "Starting BLE service for aliases: $aliases")
+        layoutSpinner.isEnabled    = false
+        layoutSpinner.alpha        = 0.75f
+        connectAllButton.isEnabled = false
+        globalStatusText.text      = "Connecting to ${aliases.size} device(s)…"
 
         lifecycleScope.launch {
             val overlays   = layoutDataStore.loadOverlayElements(selectedLayoutName!!)
             val layoutJson = Gson().toJson(overlays)
 
-            // ── This single call wires up all devices in BLEConnectionManager ──
             BLEConnectionManager.startService(
                 context    = this@MultiDeviceStreamActivity,
                 aliases    = aliases,
@@ -261,10 +206,14 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         }
     }
 
-    /** Inflate a status card for each alias before connections arrive */
     private fun inflateDeviceCards(aliases: List<String>) {
         deviceCardContainer.removeAllViews()
         deviceCardViews.clear()
+        deviceChannelCoords.clear()
+        deviceTsBuffers.clear()
+        deviceRedBuffers.clear()
+        deviceIrBuffers.clear()
+        deviceSpinnerIndex.clear()
 
         for (alias in aliases) {
             val card = LayoutInflater.from(this)
@@ -274,11 +223,15 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
             card.findViewById<TextView>(R.id.text_device_status).text   = "Connecting…"
             card.findViewById<TextView>(R.id.text_device_rssi).text     = "RSSI: —"
             card.findViewById<TextView>(R.id.text_device_battery).text  = "Battery: —"
-            card.findViewById<TextView>(R.id.text_device_datarate).text = "Data: —"
+            card.findViewById<TextView>(R.id.text_device_datarate).text = "Samples: —"
 
-            // Plot starts blank — data arrives once streaming begins
             val plot = card.findViewById<ChannelPlotView>(R.id.channel_plot_view)
             plot.windowSeconds = 10f
+
+            deviceTsBuffers[alias]    = ArrayDeque()
+            deviceRedBuffers[alias]   = ArrayDeque()
+            deviceIrBuffers[alias]    = ArrayDeque()
+            deviceSpinnerIndex[alias] = 0
 
             deviceCardContainer.addView(card)
             deviceCardViews[alias] = card
@@ -286,59 +239,77 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Poll BLEConnectionManager until all aliases are connected (or timeout).
-     *
-     * BLEConnectionManager.getStreamReadinessStatus() returns true only when
-     * connections.size == targetDevices.size AND all connections are live —
-     * exactly the condition we need.
-     */
     private suspend fun waitForAllConnections(aliases: List<String>) {
-        val timeoutMs  = 20_000L
-        val pollMs     = 500L
-        val maxRetries = (timeoutMs / pollMs).toInt()
-
+        val maxRetries = 40  // 40 × 500 ms = 20 s
         repeat(maxRetries) { attempt ->
-            delay(pollMs)
-
+            delay(500)
             val statuses = BLEConnectionManager.getConnectionStatuses()
-            Log.d(TAG, "Connection poll #$attempt → $statuses")
-
-            // Update each card with current state
-            for ((alias, connected) in statuses) {
-                updateCardStatus(alias, connected)
-            }
+            statuses.forEach { (alias, connected) -> updateCardStatus(alias, connected) }
+            Log.d(TAG, "Poll #$attempt → $statuses")
 
             if (BLEConnectionManager.getStreamReadinessStatus()) {
                 onAllConnected(aliases)
                 return
             }
-
-            globalStatusText.text = "Connecting… (${statuses.values.count { it }}/${aliases.size} ready)"
+            globalStatusText.text =
+                "Connecting… (${statuses.values.count { it }}/${aliases.size} ready)"
         }
 
-        // Timeout
-        globalStatusText.text = "❌ Not all devices connected after ${timeoutMs / 1000}s"
-        showErrorDialog("Could not connect to all selected devices. Check they are powered on.")
+        globalStatusText.text = "❌ Not all devices connected after 20 s"
+        showErrorDialog("Could not connect to all selected devices.")
         connectAllButton.isEnabled = true
         layoutSpinner.isEnabled    = true
-        deviceListContainer.isEnabled = true
     }
 
     private fun onAllConnected(aliases: List<String>) {
-        Log.i(TAG, "✅ All ${aliases.size} device(s) connected and ready to stream")
+        Log.i(TAG, "✅ All ${aliases.size} device(s) connected")
         isConnected = true
-
-        globalStatusText.text = "✅ Connected: ${aliases.joinToString(", ")}"
-        connectAllButton.text      = "Disconnect All"
-        connectAllButton.isEnabled = true
+        globalStatusText.text        = "✅ Connected: ${aliases.joinToString(", ")}"
+        connectAllButton.text        = "Disconnect All"
+        connectAllButton.isEnabled   = true
         streamToggleButton.isEnabled = true
-        streamToggleButton.text    = "Start Streaming"
-
+        streamToggleButton.text      = "Start Streaming"
         BLEConnectionManager.getDeviceBatteryLevel()
 
-        // Begin periodic polling for RSSI, battery, data rate
-        startPolling()
+        lifecycleScope.launch { populateChannelSpinners() }
+    }
+
+    /**
+     * Loads channel coords from the service and wires up each card's spinner.
+     * Matches exactly what StreamfNIRSData does in layoutInit().
+     */
+    private suspend fun populateChannelSpinners() {
+        val coords = BLEConnectionManager.getChannelDisplayData()
+        if (coords.isEmpty()) {
+            Log.w(TAG, "Channel coords empty — will retry during polling")
+            return
+        }
+
+        val labels = coords.map {
+            "Ch ${it.channelNumber + 1} (${it.type}) S${it.sourceId}:D${it.detectorId}"
+        }
+
+        for ((alias, card) in deviceCardViews) {
+            deviceChannelCoords[alias] = coords
+
+            val spinner = card.findViewById<Spinner>(R.id.spinner_channels)
+            spinner.adapter = ArrayAdapter(
+                this,
+                android.R.layout.simple_spinner_dropdown_item,
+                labels
+            )
+            spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: AdapterView<*>?, v: View?, position: Int, id: Long) {
+                    deviceSpinnerIndex[alias] = position
+                    deviceTsBuffers[alias]?.clear()
+                    deviceRedBuffers[alias]?.clear()
+                    deviceIrBuffers[alias]?.clear()
+                    Log.d(TAG, "[$alias] Channel switched to position $position")
+                }
+                override fun onNothingSelected(p: AdapterView<*>?) {}
+            }
+            Log.d(TAG, "[$alias] Spinner populated with ${labels.size} channels")
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -346,22 +317,17 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         pollingJob?.cancel()
         isStreaming = false
         isConnected = false
-
         BLEConnectionManager.stopService(this, "User disconnected")
-        Log.i(TAG, "Disconnected all devices")
 
-        globalStatusText.text = "Disconnected"
+        globalStatusText.text        = "Disconnected"
         streamToggleButton.isEnabled = false
-        streamToggleButton.text = "Start Streaming"
-        connectAllButton.text   = "Connect All"
+        streamToggleButton.text      = "Start Streaming"
+        connectAllButton.text        = "Connect All"
+        layoutSpinner.isEnabled      = true
+        layoutSpinner.alpha          = 1f
+        connectAllButton.isEnabled   = true
 
-        // Re-enable selection UI
-        layoutSpinner.isEnabled       = true
-        layoutSpinner.alpha           = 1f
-        deviceListContainer.isEnabled = true
-        connectAllButton.isEnabled    = true
-
-        for ((alias, card) in deviceCardViews) {
+        deviceCardViews.forEach { (alias, card) ->
             card.findViewById<TextView>(R.id.text_device_status).text = "Disconnected"
             Log.d(TAG, "[$alias] marked disconnected")
         }
@@ -378,91 +344,154 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
             BLEConnectionManager.startStreamFromDevice(ledIntensityValues, layoutName)
             isStreaming = true
             streamToggleButton.text = "Stop Streaming"
-            Log.i(TAG, "▶ Streaming started on all devices")
-
-            // Log to terminal exactly which devices are streaming
-            BLEConnectionManager.getConnectionStatuses().forEach { (alias, connected) ->
-                Log.i(TAG, "  [$alias] streaming=$connected")
-            }
+            Log.i(TAG, "▶ Streaming started")
+            startPolling()
         } else {
             BLEConnectionManager.stopStreamingFromDevice()
             isStreaming = false
             streamToggleButton.text = "Start Streaming"
-            Log.i(TAG, "⏹ Streaming stopped on all devices")
+            Log.i(TAG, "⏹ Streaming stopped")
+            pollingJob?.cancel()
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // Polling — updates device cards every 500 ms
+    // Polling — mirrors StreamfNIRSData.startPollingServiceData() exactly
     // ─────────────────────────────────────────────────────────────────────
 
     private fun startPolling() {
         pollingJob?.cancel()
-        pollingJob = lifecycleScope.launch {
-            while (isActive) {
-                delay(500)
-                refreshDeviceCards()
+        pollingJob = lifecycleScope.launch(Dispatchers.Default) {
+
+            Log.d(TAG, "Polling engine started")
+
+            while (isActive && isConnected) {
+                val now = System.currentTimeMillis()
+
+                // 1. Snapshot UI-owned state on main thread
+                val (snapshotCoords, snapshotIndices) = withContext(Dispatchers.Main) {
+                    Pair(deviceChannelCoords.toMap(), deviceSpinnerIndex.toMap())
+                }
+
+                // 2. Fetch data from BLE service (background thread is fine)
+                val rawMap  = BLEConnectionManager.getLatestfNIRSData(maxPoints)
+                val rssiMap = BLEConnectionManager.readLatestSignalLevels()
+                val battMap = BLEConnectionManager.readLatestBatteryLevels()
                 BLEConnectionManager.requestConnectionSignalLevel()
+
+                Log.d(TAG, "Poll: rawMap keys=${rawMap.keys}")
+
+                // rawMap is keyed by MAC address; aliasList preserves insertion order
+                // which matches the order BLEConnectionManager found the devices.
+                val macList   = rawMap.keys.toList()
+                val aliasList = deviceCardViews.keys.toList()
+
+                // 3. Process each device on background thread
+                for (i in aliasList.indices) {
+                    val alias = aliasList[i]
+                    val mac   = macList.getOrNull(i) ?: continue
+                    val fNIRS = rawMap[mac] ?: continue
+
+                    val coords       = snapshotCoords[alias] ?: continue
+                    val spinnerIndex = snapshotIndices[alias] ?: 0
+
+                    if (fNIRS.isEmpty() || coords.isEmpty()) continue
+
+                    val lastRound = fNIRS.last()
+                    if (lastRound.timestamps.isEmpty()) continue
+
+                    // Use channelNumber as the data vector index — same as StreamfNIRSData
+                    val ch   = if (spinnerIndex in coords.indices) coords[spinnerIndex] else coords[0]
+                    val chId = ch.channelNumber
+
+                    val latestRed = lastRound.redData.lastOrNull() ?: continue
+                    val latestIr  = lastRound.irData.lastOrNull()  ?: continue
+
+                    if (chId !in latestRed.indices || chId !in latestIr.indices) {
+                        Log.w(TAG, "[$alias] chId=$chId out of range (redVec=${latestRed.size})")
+                        continue
+                    }
+
+                    val ts  = lastRound.timestamps.last()
+                    val red = latestRed[chId]
+                    val ir  = latestIr[chId]
+
+                    val tsBuf  = deviceTsBuffers[alias]  ?: continue
+                    val redBuf = deviceRedBuffers[alias] ?: continue
+                    val irBuf  = deviceIrBuffers[alias]  ?: continue
+
+                    tsBuf.add(ts);  redBuf.add(red);  irBuf.add(ir)
+                    while (tsBuf.size  > maxPoints) tsBuf.removeFirst()
+                    while (redBuf.size > maxPoints) redBuf.removeFirst()
+                    while (irBuf.size  > maxPoints) irBuf.removeFirst()
+
+                    Log.d(TAG, "[$alias] ch=$chId ts=$ts red=$red ir=$ir buf=${tsBuf.size}")
+                }
+
+                // 4. Update UI on main thread
+                withContext(Dispatchers.Main) {
+
+                    // If spinners weren't ready at connect time, retry now
+                    if (deviceChannelCoords.values.any { it.isEmpty() }) {
+                        populateChannelSpinners()
+                    }
+
+                    for (i in aliasList.indices) {
+                        val alias = aliasList[i]
+                        val card  = deviceCardViews[alias] ?: continue
+
+                        // Connection status
+                        val connected = BLEConnectionManager.getConnectionStatuses()[alias] ?: false
+                        updateCardStatus(alias, connected)
+
+                        // RSSI
+                        val rssi = rssiMap[alias]
+                        if (rssi != null && rssi != 0)
+                            card.findViewById<TextView>(R.id.text_device_rssi).text = "RSSI: $rssi dBm"
+
+                        // Battery
+                        val batt = battMap[alias]
+                        if (batt != null && batt > 0)
+                            card.findViewById<TextView>(R.id.text_device_battery).text = "Battery: $batt%"
+
+                        // Sample count
+                        card.findViewById<TextView>(R.id.text_device_datarate).text =
+                            "Samples: ${deviceTsBuffers[alias]?.size ?: 0}"
+
+                        // Plot (throttled to avoid overdrawing)
+                        if (now - lastPlotUpdateTime > PLOT_UPDATE_INTERVAL_MS) {
+                            val plot    = card.findViewById<ChannelPlotView>(R.id.channel_plot_view)
+                            val tsList  = deviceTsBuffers[alias]?.toList()  ?: emptyList()
+                            val redList = deviceRedBuffers[alias]?.toList() ?: emptyList()
+                            val irList  = deviceIrBuffers[alias]?.toList()  ?: emptyList()
+
+                            if (tsList.size >= 2) {
+                                plot.updateData(tsList, redList, irList)
+                            }
+                        }
+                    }
+
+                    if (now - lastPlotUpdateTime > PLOT_UPDATE_INTERVAL_MS) {
+                        lastPlotUpdateTime = now
+                    }
+                }
+
+                delay(300)
             }
+
+            Log.d(TAG, "Polling engine stopped")
         }
     }
 
-    private fun refreshDeviceCards() {
-        val statuses = BLEConnectionManager.getConnectionStatuses()
-        val rssiMap  = BLEConnectionManager.readLatestSignalLevels()
-        val battMap  = BLEConnectionManager.readLatestBatteryLevels()
-        val dataMap  = BLEConnectionManager.getLatestfNIRSData(maxPoints = 90)
+    // ─────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────────
 
-        for ((alias, card) in deviceCardViews) {
-            // Connection status
-            val connected = statuses[alias] ?: false
-            updateCardStatus(alias, connected)
-
-            // RSSI
-            val rssi = rssiMap[alias]
-            if (rssi != null && rssi != 0)
-                card.findViewById<TextView>(R.id.text_device_rssi).text = "RSSI: $rssi dBm"
-
-            // Battery
-            val batt = battMap[alias]
-            if (batt != null && batt > 0)
-                card.findViewById<TextView>(R.id.text_device_battery).text = "Battery: $batt%"
-
-            // Plot — find the data entry whose key (MAC) maps to this alias
-            // dataMap is keyed by MAC; we match by looking at connection statuses
-            // which are keyed by alias. We find the MAC by cross-referencing.
-            val matchingEntry = dataMap.entries.firstOrNull { (_, rounds) ->
-                rounds.isNotEmpty()
-            }
-
-            val round = matchingEntry?.value?.lastOrNull()
-            if (round != null && round.timestamps.isNotEmpty() && isStreaming) {
-                val plot = card.findViewById<ChannelPlotView>(R.id.channel_plot_view)
-
-                // Get which channel this card's spinner is on
-                val spinner = card.findViewById<Spinner>(R.id.spinner_channels)
-                val channelIndex = spinner.selectedItemPosition.coerceAtLeast(0)
-
-                // Pull red and IR for that channel across all timestamps
-                val redSeries = round.redData.map { sample ->
-                    if (channelIndex < sample.size) sample[channelIndex] else 0f
-                }
-                val irSeries = round.irData.map { sample ->
-                    if (channelIndex < sample.size) sample[channelIndex] else 0f
-                }
-
-                plot.updateData(round.timestamps, redSeries, irSeries)
-
-                card.findViewById<TextView>(R.id.text_device_datarate).text =
-                    "Samples: ${round.timestamps.size}"
-            }
-        }
-    }
     private fun updateCardStatus(alias: String, connected: Boolean) {
         val card = deviceCardViews[alias] ?: return
-        val statusText = card.findViewById<TextView>(R.id.text_device_status)
-        statusText.text = if (connected) "Connected ✅" else "Disconnected ❌"
-        statusText.setTextColor(
+        val tv   = card.findViewById<TextView>(R.id.text_device_status)
+        tv.text = if (connected) "Connected ✅" else "Disconnected ❌"
+        tv.setTextColor(
             if (connected)
                 ContextCompat.getColor(this, android.R.color.holo_green_dark)
             else
@@ -470,31 +499,14 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         )
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Stimulus events (same API as single-device flow)
-    // ─────────────────────────────────────────────────────────────────────
-
-    /**
-     * Call this from any stimulus button to tag an event on ALL active devices
-     * simultaneously.  The BLEConnectionManager broadcasts to every connection.
-     */
-    fun fireStimulusEvent(label: String, isStart: Boolean) {
-        BLEConnectionManager.broadcastStimulusEvent(StimulusEvent(label, isStart))
-        Log.d(TAG, "Stimulus '$label' (start=$isStart) broadcast to all devices")
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────
-
     private fun isBluetoothEnabled(): Boolean {
-        val manager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-        return manager.adapter?.isEnabled == true
+        val mgr = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
+        return mgr.adapter?.isEnabled == true
     }
 
     private fun showErrorDialog(message: String) {
         AlertDialog.Builder(this)
-            .setTitle("Connection Error")
+            .setTitle("Error")
             .setMessage(message)
             .setPositiveButton("OK", null)
             .show()
