@@ -201,6 +201,14 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
                 layoutName = selectedLayoutName!!
             )
             BLEConnectionManager.setLayoutElements(overlays)
+            // Pre-populate channel coords directly from overlays so spinner
+            // and plot work before first data round arrives
+            val preloadedCoords = BLEConnectionManager.getChannelDisplayData()
+            if (preloadedCoords.isNotEmpty()) {
+                for ((alias, _) in deviceCardViews) {
+                    deviceChannelCoords[alias] = preloadedCoords
+                }
+            }
 
             inflateDeviceCards(aliases)
             waitForAllConnections(aliases)
@@ -342,6 +350,18 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
     private fun onStreamToggleClicked() {
         if (!isStreaming) {
             val layoutName = selectedLayoutName ?: return
+
+            // If channel coords still empty, try loading them now
+            if (deviceChannelCoords.values.all { it.isEmpty() }) {
+                val coords = BLEConnectionManager.getChannelDisplayData()
+                if (coords.isNotEmpty()) {
+                    for ((alias, _) in deviceCardViews) {
+                        deviceChannelCoords[alias] = coords
+                    }
+                    lifecycleScope.launch { populateChannelSpinners() }
+                }
+            }
+
             BLEConnectionManager.startStreamFromDevice(ledIntensityValues, layoutName)
             isStreaming = true
             streamToggleButton.text = "Stop Streaming"
