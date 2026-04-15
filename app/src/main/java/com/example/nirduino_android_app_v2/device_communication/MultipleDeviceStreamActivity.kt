@@ -230,9 +230,7 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
 
             card.findViewById<TextView>(R.id.text_device_alias).text    = alias
             card.findViewById<TextView>(R.id.text_device_status).text   = "Connecting…"
-            card.findViewById<TextView>(R.id.text_device_rssi).text     = "RSSI: —"
             card.findViewById<TextView>(R.id.text_device_battery).text  = "Battery: —"
-            card.findViewById<TextView>(R.id.text_device_datarate).text = "Samples: —"
 
             val plot = card.findViewById<ChannelPlotView>(R.id.channel_plot_view)
             plot.windowSeconds = 10f
@@ -245,6 +243,8 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
             deviceCardContainer.addView(card)
             deviceCardViews[alias] = card
             Log.d(TAG, "Card inflated for $alias")
+            // Confirms that each device got its own buffer (one per graph)
+            Log.d(TAG, "Buffers initialized for $alias — ts:${deviceTsBuffers[alias]?.size} red:${deviceRedBuffers[alias]?.size} ir:${deviceIrBuffers[alias]?.size}")
         }
     }
 
@@ -272,6 +272,9 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
 
     private fun onAllConnected(aliases: List<String>) {
         Log.i(TAG, "✅ All ${aliases.size} device(s) connected")
+        // Confirms the card map and coord map both have the same devices before streaming starts.
+        Log.d(TAG, "deviceCardViews keys=${deviceCardViews.keys}")
+        Log.d(TAG, "deviceChannelCoords keys=${deviceChannelCoords.keys}")
         isConnected = true
         globalStatusText.text        = "✅ Connected: ${aliases.joinToString(", ")}"
         connectAllButton.text        = "Disconnect All"
@@ -365,7 +368,8 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
             BLEConnectionManager.startStreamFromDevice(ledIntensityValues, layoutName)
             isStreaming = true
             streamToggleButton.text = "Stop Streaming"
-            Log.i(TAG, "▶ Streaming started")
+            // Determines if both cards exist and coords are loaded.
+            Log.i(TAG, "▶ Streaming started — cards=${deviceCardViews.keys} coordsReady=${deviceChannelCoords.keys}")
             startPolling()
         } else {
             BLEConnectionManager.stopStreamingFromDevice()
@@ -411,6 +415,8 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
                 for (i in aliasList.indices) {
                     val alias = aliasList[i]
                     val mac   = macList.getOrNull(i) ?: continue
+                    // Confirms each alias is being matched to the correct MAC address.
+                    Log.d(TAG, "Mapping index $i: alias=$alias → mac=$mac")
                     val fNIRS = rawMap[mac] ?: continue
 
                     val coords       = snapshotCoords[alias] ?: continue
@@ -487,6 +493,8 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
                             val irList  = deviceIrBuffers[alias]?.toList()  ?: emptyList()
 
                             if (tsList.size >= 2) {
+                                // Determines if plot view is actually being told to draw
+                                Log.d(TAG, "[$alias] plot.updateData called — points=${tsList.size}")
                                 plot.updateData(tsList, redList, irList)
                             }
                         }
