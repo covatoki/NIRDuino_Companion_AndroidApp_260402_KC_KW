@@ -73,9 +73,6 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         80, 78, 80, 78
     )
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Lifecycle
-    // ─────────────────────────────────────────────────────────────────────
 
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -286,10 +283,6 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         lifecycleScope.launch { populateChannelSpinners() }
     }
 
-    /**
-     * Loads channel coords from the service and wires up each card's spinner.
-     * Matches exactly what StreamfNIRSData does in layoutInit().
-     */
     private suspend fun populateChannelSpinners() {
         val coords = BLEConnectionManager.getChannelDisplayData()
         if (coords.isEmpty()) {
@@ -345,10 +338,6 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Streaming
-    // ─────────────────────────────────────────────────────────────────────
-
     @SuppressLint("MissingPermission")
     private fun onStreamToggleClicked() {
         if (!isStreaming) {
@@ -379,10 +368,6 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
             pollingJob?.cancel()
         }
     }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // Polling — mirrors StreamfNIRSData.startPollingServiceData() exactly
-    // ─────────────────────────────────────────────────────────────────────
 
     private fun startPolling() {
         pollingJob?.cancel()
@@ -512,9 +497,6 @@ class MultiDeviceStreamActivity : AppCompatActivity() {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────
 
     private fun updateCardStatus(alias: String, connected: Boolean) {
         val card = deviceCardViews[alias] ?: return
