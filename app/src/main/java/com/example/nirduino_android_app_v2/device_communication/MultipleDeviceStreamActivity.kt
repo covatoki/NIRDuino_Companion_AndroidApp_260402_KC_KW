@@ -20,7 +20,7 @@ import com.example.nirduino_android_app_v2.device_manager_files.KnownDeviceDataS
 import com.example.nirduino_android_app_v2.layout_studio_files.LayoutDataStore
 import com.google.gson.Gson
 import kotlinx.coroutines.*
-
+// test comment
 class MultiDeviceStreamActivity : AppCompatActivity() {
 
     // ── UI references ─────────────────────────────────────────────────────
